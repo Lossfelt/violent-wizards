@@ -1,16 +1,18 @@
-**
+# Violent Wizards
 
-Sentient Unstable Bomb (SUB's)
+## Konsept
 
-En slags levende atombomber. Må initieres og fostres opp kort tid før de brukes? Tilfeldig hvor vanskelig hver en er å fostre opp, men vanskeligheten er korrelert med effekten. Tar kort tid per bombe, men de brytes raskt ned hvis de ikke benyttes(evt at man alltid har fem parat?).
+En slags levende missiler som trollmenn skaper. Det tar 10-15 minutter å dyrke et sett med SUB's. Disse kan så enten beholdes for bruk, eller man kan forkaste én eller flere for å dyrke nye.
 
-Bombene er usynlige for andre enn trollmenn, eteriske. Hver bombe har en viss frekvens, skapt tilfeldig ved initieringen.
+Bombene er usynlige for andre enn trollmenn. Hver bombe har en viss frekvens, skapt tilfeldig når bomben lages.
 
+Brukes av trollmenn til å slåss mot hverandre. Hver trollmann har et skjold som gjør dem omtrent immune mot alt annet enn SUB's, så de er kun farlige for hverandre. Hvert skjold har en frekvens som definerer hvor sårbare de er for ulike SUB’s. Det er viktig å holde sin egen skjult, samt svært gunstig hvis man finner ut av en annen trollmanns skjoldfrekvens, da man kan dyrke SUB's spisset mot den frekvensen.
 
+Frekvensen til skjold og SUB's er fordelt på gradene til en sirkel, så 360 frekvenser. Jo nærmere frekvensen til en SUB er skjoldet den treffer, jo mer av skaden går gjennom.
 
-Brukes av trollmenn til å slåss mot hverandre. Hver trollmann har et skjold som gjør dem omtrent immune mot alt annet, så de er kun farlige for hverandre. Hvert skjold har en frekvens som gjør dem mer eller mindre sårbare for ulike SUB’s. Det er viktig å holde sin egen skjult, samt svært gunstig hvis man finner ut av en annen trollmanns skjoldfrekvens.
+Pga dyrketiden bør man tenke seg om før man forkaster bombene sine, ettersom man da vil ha færre eller ingen å forsvare seg med hvis det blir kamp.
 
-
+### SUB's (Sentient Unstable Bomb)
 
 Før du kan slåss trenger du å skape nye bomber. Dette tar ca 10 minutter. I den tiden er man sårbar ettersom man ikke kan forsvare seg. Man lager dem så bra som mulig. Pga ventetiden bør man tenke seg om hvis man er misfornøyd med bombene sine. Hvis man forkaster dem så vil det ta tid før man har nye klar og kan forsvare seg (det er ikke mulig å kun forkaste noen av bombene). Deretter er det om å gjøre å treffe hverandre. De beste bombene er mye verdt og man vil helst være sikker på å treffe før man bruker dem. Hvor skadet man selv er og hvor skadet motstanderen er påvirker treffsikkerheten?
 
@@ -32,11 +34,9 @@ Styrke på SUB er normalfordelt rundt 50. Frekvensen til Skjold og SUB er fra 0 
 
 Treffsikkerheten er Helse1 / (Helse1+Helse2).
 
-**
+## Idéer
 
-
-
-### Idéer
+### Spillet
 
 - Aktive vinduer: spillet skjer kun i korte vinduer, feks hvert kvarter. Der kan man velge om man høster SUB'er som har blitt mode og kan kjempe med noen, eller om man forkaster dem og venter på neste høstning for å forhåpentligvis få bedre frekvenser. Dette gjør man samtidig, så ved å forkaste tar man sjansen på at man ikke har noen våpen hvis noen rett etterpå angriper deg. Samtidig ser man ikke om noen har forkastet, så man er ikke synlig svak.
 
@@ -46,8 +46,10 @@ Treffsikkerheten er Helse1 / (Helse1+Helse2).
 
 - Det bør være en slags offentlig liste over hvem som har slåss mot hvem, dette for at man skal kunne vite hvem som trolig har informasjon om hvem andre. Historien kan være at alle Wizards føler energien av der det foregår kamp og hvem det kjempes mellom.
 
+### SUB'ene
 
-
-
+- Må initieres og fostres opp kort tid før de brukes?
+- Tilfeldig hvor vanskelig hver en er å fostre opp, men vanskeligheten er korrelert med effekten?
+- Er grunnskaden til SUB's den samme, eller varierer de også tilfeldig? Feks normalfordelt?
 
 
