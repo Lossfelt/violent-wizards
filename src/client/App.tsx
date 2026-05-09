@@ -111,6 +111,7 @@ export function App() {
   const [selectedDiscardSlots, setSelectedDiscardSlots] = useState<number[]>([]);
   const [shareReceiverId, setShareReceiverId] = useState("");
   const [shareTargetId, setShareTargetId] = useState("");
+  const [showBattleResult, setShowBattleResult] = useState(false);
 
   useEffect(() => {
     const codeFromUrl = new URLSearchParams(window.location.search).get("code");
@@ -318,6 +319,15 @@ export function App() {
     game?.attackSubmittedPlayerIds.includes(game.currentPlayer.id) ?? false;
   const isGameHost = game?.hostPlayerId === game?.currentPlayer.id;
   const currentBattle = game?.currentBattle ?? null;
+  const lastExchange = currentBattle?.lastExchange ?? null;
+  const lastDamageTaken =
+    game && lastExchange
+      ? Math.ceil(lastExchange.damageByPlayerId[game.currentPlayer.id] ?? 0)
+      : 0;
+  const lastDamageDealt =
+    game && lastExchange && currentBattle
+      ? Math.ceil(lastExchange.damageByPlayerId[currentBattle.opponentId] ?? 0)
+      : 0;
   const mustChooseBattleAction =
     currentBattle?.waitingForPlayerIds.includes(game?.currentPlayer.id ?? "") ?? false;
   const isFleeing =
@@ -350,15 +360,33 @@ export function App() {
     }).then(setQrCodeUrl);
   }, [joinUrl]);
 
+  useEffect(() => {
+    if (game?.status !== "round_cleanup" || !currentBattle?.lastExchange) {
+      setShowBattleResult(false);
+      return;
+    }
+
+    setShowBattleResult(true);
+    const timeoutId = window.setTimeout(() => setShowBattleResult(false), 2400);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [currentBattle?.id, currentBattle?.lastExchange?.index, game?.status]);
+
   return (
     <main className="app-shell">
       <section className="intro-panel" aria-labelledby="app-title">
-        <p className="eyebrow">Violent Wizards v1</p>
-        <h1 id="app-title">Gather the circle. Hide your frequency.</h1>
-        <p className="intro-copy">
-          The old prototype has been replaced with a modern TypeScript app shell.
-          Lobby, realtime state, combat rules, and insight sharing come next.
-        </p>
+        <header className="app-header">
+          <div>
+            <p className="eyebrow">Violent Wizards</p>
+            <h1 id="app-title">Hide your frequency.</h1>
+          </div>
+          {game ? (
+            <div className="header-pill">
+              Round {game.roundNumber}
+              <span>{game.status.replace("_", " ")}</span>
+            </div>
+          ) : null}
+        </header>
         <section className="lobby-panel" aria-label="Game controls">
           {!lobby && !game ? (
             <div className="lobby-form">
@@ -533,15 +561,11 @@ export function App() {
                   <h2>{currentBattle ? `Battle vs ${currentBattle.opponentName}` : "Matched battles"}</h2>
                   {currentBattle?.status === "active" ? (
                     <>
-                      {currentBattle.lastExchange ? (
-                        <div className="battle-row">
-                          You took{" "}
-                          {Math.ceil(
-                            currentBattle.lastExchange.damageByPlayerId[
-                              game.currentPlayer.id
-                            ] ?? 0,
-                          )}{" "}
-                          damage last exchange.
+                      {lastExchange ? (
+                        <div className="battle-result-card">
+                          <span>Last exchange</span>
+                          <strong>{lastDamageTaken} damage taken</strong>
+                          <small>{lastDamageDealt} damage dealt</small>
                         </div>
                       ) : null}
                       {isFleeing ? (
@@ -616,15 +640,30 @@ export function App() {
                 </div>
               ) : null}
               {game.status === "round_cleanup" ? (
-                <div className="phase-panel">
-                  <h2>Round committed</h2>
-                  <p>All battle results have been applied.</p>
-                  {isGameHost ? (
-                    <button className="primary-button" onClick={startNextRound}>
-                      Start next round
-                    </button>
+                <div className="phase-panel result-phase">
+                  {showBattleResult && currentBattle?.lastExchange ? (
+                    <>
+                      <h2>Battle result</h2>
+                      <div className="battle-result-card large">
+                        <span>Final exchange</span>
+                        <strong>{lastDamageTaken} damage taken</strong>
+                        <small>{lastDamageDealt} damage dealt</small>
+                      </div>
+                    </>
                   ) : (
-                    <p className="waiting-copy">Waiting for the host to start the next round.</p>
+                    <>
+                      <h2>Round committed</h2>
+                      <p>All battle results have been applied.</p>
+                      {isGameHost ? (
+                        <button className="primary-button" onClick={startNextRound}>
+                          Start next round
+                        </button>
+                      ) : (
+                        <p className="waiting-copy">
+                          Waiting for the host to start the next round.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               ) : null}
@@ -731,28 +770,34 @@ export function App() {
             </div>
           ) : null}
         </section>
-        <dl className="status-grid" aria-label="Realtime server status">
-          <div>
-            <dt>Realtime</dt>
-            <dd data-state={connectionState}>{connectionState}</dd>
-          </div>
-          <div>
-            <dt>Socket target</dt>
-            <dd>{SERVER_URL || "/socket.io proxy"}</dd>
-          </div>
-          <div>
-            <dt>Socket ID</dt>
-            <dd>{handshake?.socketId ?? "Waiting"}</dd>
-          </div>
-          <div>
-            <dt>Clients</dt>
-            <dd>{serverStatus?.connectedClients ?? 0}</dd>
-          </div>
-          <div>
-            <dt>Server time</dt>
-            <dd>{handshake?.serverTime ?? "Waiting"}</dd>
-          </div>
-        </dl>
+        <details className="status-details" open={!game}>
+          <summary>
+            Connection
+            <span data-state={connectionState}>{connectionState}</span>
+          </summary>
+          <dl className="status-grid" aria-label="Realtime server status">
+            <div>
+              <dt>Realtime</dt>
+              <dd data-state={connectionState}>{connectionState}</dd>
+            </div>
+            <div>
+              <dt>Socket target</dt>
+              <dd>{SERVER_URL || "/socket.io proxy"}</dd>
+            </div>
+            <div>
+              <dt>Socket ID</dt>
+              <dd>{handshake?.socketId ?? "Waiting"}</dd>
+            </div>
+            <div>
+              <dt>Clients</dt>
+              <dd>{serverStatus?.connectedClients ?? 0}</dd>
+            </div>
+            <div>
+              <dt>Server time</dt>
+              <dd>{handshake?.serverTime ?? "Waiting"}</dd>
+            </div>
+          </dl>
+        </details>
       </section>
     </main>
   );

@@ -30,24 +30,34 @@ textarea {
 .app-shell {
   display: grid;
   min-height: 100vh;
-  place-items: center;
-  padding: 24px;
+  align-items: start;
+  justify-items: center;
+  padding: clamp(14px, 3vw, 24px);
   background:
-    radial-gradient(circle at 50% 0%, rgba(150, 37, 69, 0.22), transparent 34rem),
+    radial-gradient(circle at 50% 0%, rgba(150, 37, 69, 0.18), transparent 30rem),
     linear-gradient(180deg, #11101a 0%, #08070d 72%);
 }
 
 .intro-panel {
-  width: min(100%, 760px);
+  width: min(100%, 820px);
   border: 1px solid rgba(245, 239, 228, 0.18);
   border-radius: 8px;
-  padding: clamp(28px, 7vw, 64px);
+  padding: clamp(16px, 4vw, 28px);
   background: rgba(13, 12, 20, 0.76);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
 }
 
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(245, 239, 228, 0.1);
+}
+
 .eyebrow {
-  margin: 0 0 14px;
+  margin: 0 0 4px;
   color: #d7b56d;
   font-size: 0.78rem;
   font-weight: 700;
@@ -56,23 +66,34 @@ textarea {
 }
 
 h1 {
-  max-width: 11ch;
   margin: 0;
-  font-size: clamp(2.6rem, 9vw, 5.5rem);
-  line-height: 0.94;
+  font-size: clamp(1.35rem, 5vw, 2rem);
+  line-height: 1.05;
   letter-spacing: 0;
 }
 
-.intro-copy {
-  max-width: 34rem;
-  margin: 24px 0 0;
-  color: #c9c0b2;
-  font-size: clamp(1rem, 2.8vw, 1.16rem);
-  line-height: 1.65;
+.header-pill {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(215, 181, 109, 0.24);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #f5efe4;
+  background: rgba(215, 181, 109, 0.08);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.header-pill span {
+  color: #d7b56d;
+  font-size: 0.72rem;
+  text-transform: capitalize;
 }
 
 .lobby-panel {
-  margin: 32px 0 0;
+  margin: 18px 0 0;
 }
 
 .lobby-form {
@@ -251,6 +272,11 @@ button:disabled {
   gap: 14px;
 }
 
+.result-phase {
+  min-height: 178px;
+  align-content: center;
+}
+
 .phase-panel h2 {
   margin: 0;
   color: #f5efe4;
@@ -314,6 +340,41 @@ button:disabled {
   color: #f5efe4;
   background: rgba(5, 5, 10, 0.32);
   font-weight: 700;
+}
+
+.battle-result-card {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(215, 181, 109, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(215, 181, 109, 0.1);
+}
+
+.battle-result-card span {
+  color: #8f877a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.battle-result-card strong {
+  color: #f5efe4;
+  font-size: 1.15rem;
+}
+
+.battle-result-card small {
+  color: #8ddfbc;
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.battle-result-card.large {
+  padding: 18px;
+}
+
+.battle-result-card.large strong {
+  font-size: clamp(1.45rem, 6vw, 2.2rem);
 }
 
 .lobby-code-block,
@@ -404,11 +465,63 @@ button:disabled {
   font-size: 0.82rem;
 }
 
+.status-details {
+  margin: 18px 0 0;
+}
+
+.status-details summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  min-height: 42px;
+  border: 1px solid rgba(245, 239, 228, 0.12);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #c9c0b2;
+  background: rgba(245, 239, 228, 0.04);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 800;
+  list-style: none;
+}
+
+.status-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.status-details summary::after {
+  content: "+";
+  color: #d7b56d;
+  font-size: 1.1rem;
+}
+
+.status-details[open] summary::after {
+  content: "-";
+}
+
+.status-details summary span {
+  margin-left: auto;
+  text-transform: capitalize;
+}
+
+.status-details summary span[data-state="connected"] {
+  color: #8ddfbc;
+}
+
+.status-details summary span[data-state="connecting"] {
+  color: #d7b56d;
+}
+
+.status-details summary span[data-state="disconnected"] {
+  color: #e57a7a;
+}
+
 .status-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin: 32px 0 0;
+  margin: 12px 0 0;
 }
 
 .status-grid div {
@@ -453,6 +566,15 @@ button:disabled {
 }
 
 @media (max-width: 620px) {
+  .app-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header-pill {
+    justify-items: start;
+  }
+
   .mado-grid,
   .self-grid {
     grid-template-columns: 1fr;
