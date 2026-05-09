@@ -34,6 +34,9 @@ import {
 } from "../shared/index.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
+const allowedOrigins = [process.env.FRONTEND_URL, process.env.NETLIFY_URL]
+  .filter((origin): origin is string => Boolean(origin))
+  .flatMap((origin) => [origin, origin.replace(/^http:/, "https:")]);
 
 const app = express();
 const server = createServer(app);
@@ -44,7 +47,7 @@ const io = new Server<
   SocketData
 >(server, {
   cors: {
-    origin: true,
+    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
   },
 });
 

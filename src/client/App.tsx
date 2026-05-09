@@ -15,6 +15,7 @@ import type {
 type ConnectionState = "connecting" | "connected" | "disconnected";
 
 const SESSION_STORAGE_KEY = "violent-wizards-session-id";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL;
 const WHEEL_SIZE = 72;
 const WHEEL_CENTER = WHEEL_SIZE / 2;
 const WHEEL_RADIUS = 28;
@@ -91,7 +92,7 @@ function FrequencyWheel({
 
 export function App() {
   const socket = useMemo<Socket<ServerToClientEvents, ClientToServerEvents>>(
-    () => io({ autoConnect: false, timeout: 5000 }),
+    () => io(SERVER_URL || undefined, { autoConnect: false, timeout: 5000 }),
     [],
   );
   const sessionId = useMemo(getSessionId, []);
@@ -737,7 +738,7 @@ export function App() {
           </div>
           <div>
             <dt>Socket target</dt>
-            <dd>/socket.io proxy</dd>
+            <dd>{SERVER_URL || "/socket.io proxy"}</dd>
           </div>
           <div>
             <dt>Socket ID</dt>

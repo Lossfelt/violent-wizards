@@ -9,8 +9,11 @@
     "dev:client": "vite --host 0.0.0.0",
     "dev:client:delayed": "node -e \"setTimeout(() => { require('child_process').spawn('npm', ['run', 'dev:client'], { stdio: 'inherit', shell: true }); }, 1500)\"",
     "dev:server": "tsx watch src/server/index.ts",
-    "build": "tsc -b && vite build",
+    "build": "npm run typecheck && npm run build:client && npm run build:server",
+    "build:client": "vite build",
+    "build:server": "tsc -p tsconfig.server.build.json",
     "preview": "vite preview --host 0.0.0.0",
+    "start": "node server-dist/server/index.js",
     "test": "vitest run",
     "typecheck": "tsc -b"
   },

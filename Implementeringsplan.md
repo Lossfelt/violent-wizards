@@ -1,5 +1,65 @@
 # Implementeringsplan for Violent Wizards v1
 
+## Status 2026-05-09
+
+Denne planen er delvis gjennomført i repoet. Ny kontekst bør lese denne statusdelen først, deretter kildekoden.
+
+### Avklarte v1-valg
+
+- Bygges først som lokal utviklingsapp.
+- UI-språk er engelsk.
+- Lobby bruker korte tallkoder og QR-kode.
+- Rundeprogresjon er manuell der det trengs. Host starter spillet og starter neste runde etter cleanup.
+- Reconnect bruker `session-id` i `localStorage`.
+- Navn er fritekst. Ingen host-godkjenning eller kick i v1.
+- Visuell retning er minimalistisk okkult dashboard.
+- Døde spillere kan fortsatt se spillets utvikling.
+- Informasjonsdeling er tilgjengelig i ikke-kampfaser og ikke for spillere i aktiv kamp.
+
+### Implementert
+
+- Gammel React 16 / `react-scripts` prototype er erstattet med `Vite + React + TypeScript`.
+- Backend er satt opp med `Node.js + Express + Socket.IO`.
+- Delte TypeScript-typer ligger i `src/shared`.
+- Regelmotor ligger i `src/shared/rules.ts`.
+- Regeltester ligger i `src/shared/rules.test.ts`.
+- Lobby fungerer med create/join, kort kode, QR-kode og reconnect via session-id.
+- Socket.IO bruker Vite-proxy via `/socket.io`, med backend target `127.0.0.1:3001`.
+- Rundeflyt er implementert: start game, Mado-fylling, forkasting, angrepsvalg og matchmaking.
+- Kampflyt er implementert: Mado-valg, flee, end når motstander flykter, server-side damage, innsikt og Mado-bruk.
+- Helse vises løpende under kamp etter hver exchange.
+- Kamp stopper når spiller dør, når begge er tomme, når begge flykter, eller når en avslutter mot flyktende motstander.
+- Resultater committes samlet når alle kamper i runden er ferdige.
+- Neste runde kan startes fra `round_cleanup` av host.
+- Frekvenser visualiseres med sirkler: egen skjoldmarkør, Mado-markører og motstanders innsiktssegment.
+- Informasjonsdeling mellom spillere er implementert med serverautoritet og privat mottakshistorikk.
+- Offentlig kamphistorikk er implementert.
+- Død, seier og uavgjort er implementert på grunnnivå.
+
+### Kjente begrensninger og neste arbeid
+
+- Lokal playtest med flere nettleservinduer er ikke fullført av Codex fordi in-app browser ikke fikk åpne `localhost:5173` i denne økten.
+- UI er funksjonelt, men ikke ferdig visuelt polert.
+- Kamphistorikken viser enkel offentlig oppsummering, ikke detaljert exchange-logg per spiller.
+- Innsiktsdeling viser siste mottatte delinger enkelt, men kan få bedre tekst med avsender og target-navn.
+- Det finnes ikke database eller persistens utover in-memory serverprosess.
+- Hvis serveren restartes, forsvinner aktive spill.
+
+### Anbefalt playtest før videre bygging
+
+1. Start med `npm run dev`.
+2. Åpne to nettlesere eller to profiler på `http://localhost:5173`.
+3. Opprett lobby i én browser og join med kode eller QR/link i den andre.
+4. Start game som host.
+5. Test forkasting med ulike Mado-slots hos begge spillere.
+6. Test at begge angriper hverandre og havner i én kamp.
+7. Test Mado-valg i første exchange hos begge.
+8. Test at helse oppdateres etter hver exchange.
+9. Test flee og end battle.
+10. Test at runden går til cleanup og at host kan starte neste runde.
+11. Test informasjonsdeling etter at en spiller har fått insight level over 0.
+12. Test død, seier og uavgjort hvis mulig.
+
 Dette dokumentet er skrevet for en implementeringsrunde som ikke kjenner samtalen som ledet frem til reglene. Bruk `Konsept og regler.md` som menneskelig/regelmessig kilde, og dette dokumentet som teknisk plan for en spillbar v1.
 
 ## Mål for v1
