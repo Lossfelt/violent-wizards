@@ -321,13 +321,7 @@ export function App() {
   const currentBattle = game?.currentBattle ?? null;
   const lastExchange = currentBattle?.lastExchange ?? null;
   const lastDamageTaken =
-    game && lastExchange
-      ? Math.ceil(lastExchange.damageByPlayerId[game.currentPlayer.id] ?? 0)
-      : 0;
-  const lastDamageDealt =
-    game && lastExchange && currentBattle
-      ? Math.ceil(lastExchange.damageByPlayerId[currentBattle.opponentId] ?? 0)
-      : 0;
+    game && lastExchange ? Math.ceil(lastExchange.damageTaken) : 0;
   const mustChooseBattleAction =
     currentBattle?.waitingForPlayerIds.includes(game?.currentPlayer.id ?? "") ?? false;
   const isFleeing =
@@ -565,7 +559,6 @@ export function App() {
                         <div className="battle-result-card">
                           <span>Last exchange</span>
                           <strong>{lastDamageTaken} damage taken</strong>
-                          <small>{lastDamageDealt} damage dealt</small>
                         </div>
                       ) : null}
                       {isFleeing ? (
@@ -647,7 +640,6 @@ export function App() {
                       <div className="battle-result-card large">
                         <span>Final exchange</span>
                         <strong>{lastDamageTaken} damage taken</strong>
-                        <small>{lastDamageDealt} damage dealt</small>
                       </div>
                     </>
                   ) : (

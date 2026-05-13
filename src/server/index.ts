@@ -162,6 +162,7 @@ function createCurrentBattleSnapshot(
   const preview = createRoundBattlePreview(game, battle);
   const opponentId =
     battle.playerAId === currentPlayerId ? battle.playerBId : battle.playerAId;
+  const lastExchange = battle.exchanges.at(-1) ?? null;
 
   return {
     ...preview,
@@ -179,7 +180,12 @@ function createCurrentBattleSnapshot(
     usedMadoSlotIndexes: [
       ...(battle.usedMadoSlotIndexesByPlayerId[currentPlayerId] ?? new Set<number>()),
     ],
-    lastExchange: battle.exchanges.at(-1) ?? null,
+    lastExchange: lastExchange
+      ? {
+          index: lastExchange.index,
+          damageTaken: lastExchange.damageByPlayerId[currentPlayerId] ?? 0,
+        }
+      : null,
   };
 }
 
@@ -706,11 +712,6 @@ function commitFinishedRoundIfReady(game: LobbyGame) {
   }
 
   for (const battle of game.activeBattlesById.values()) {
-    const beforeHealth = {
-      [battle.playerAId]: game.gamePlayersById.get(battle.playerAId)!.health,
-      [battle.playerBId]: game.gamePlayersById.get(battle.playerBId)!.health,
-    };
-
     for (const playerId of [battle.playerAId, battle.playerBId]) {
       const player = game.gamePlayersById.get(playerId)!;
       player.health = battle.healthByPlayerId[playerId]!;
@@ -726,12 +727,6 @@ function commitFinishedRoundIfReady(game: LobbyGame) {
       playerAName: game.playersById.get(battle.playerAId)?.name ?? "Unknown",
       playerBName: game.playersById.get(battle.playerBId)?.name ?? "Unknown",
       exchangeCount: battle.exchanges.length,
-      damageByPlayerId: {
-        [battle.playerAId]:
-          beforeHealth[battle.playerAId]! - battle.healthByPlayerId[battle.playerAId]!,
-        [battle.playerBId]:
-          beforeHealth[battle.playerBId]! - battle.healthByPlayerId[battle.playerBId]!,
-      },
       deaths: [battle.playerAId, battle.playerBId].filter(
         (playerId) => battle.healthByPlayerId[playerId]! <= 0,
       ),

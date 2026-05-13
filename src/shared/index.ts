@@ -125,7 +125,12 @@ export type CurrentBattleSnapshot = RoundBattlePreview & {
   waitingForPlayerIds: string[];
   fleeingPlayerIds: string[];
   usedMadoSlotIndexes: number[];
-  lastExchange: Exchange | null;
+  lastExchange: LastExchangeSnapshot | null;
+};
+
+export type LastExchangeSnapshot = {
+  index: number;
+  damageTaken: number;
 };
 
 export type PublicBattleHistoryEntry = {
@@ -134,7 +139,6 @@ export type PublicBattleHistoryEntry = {
   playerAName: string;
   playerBName: string;
   exchangeCount: number;
-  damageByPlayerId: Record<string, number>;
   deaths: string[];
 };
 
