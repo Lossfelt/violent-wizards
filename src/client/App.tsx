@@ -514,11 +514,16 @@ export function App() {
           {game ? (
             <div className="game-room">
               <div className="self-grid">
-                <div>
+                <div className="self-card identity-card">
+                  <span>Wizard</span>
+                  <strong>{game.currentPlayer.name}</strong>
+                  <small>{game.currentPlayer.alive ? "active" : "fallen"}</small>
+                </div>
+                <div className="self-card health-card">
                   <span>Health</span>
                   <strong>{Math.ceil(game.currentPlayer.health)}</strong>
                 </div>
-                <div>
+                <div className="self-card shield-card">
                   <span>Shield</span>
                   <FrequencyWheel
                     label="Your shield frequency"
@@ -527,7 +532,7 @@ export function App() {
                 </div>
               </div>
               {game.status === "round_prepare" ? (
-                <div className="phase-panel">
+                <div className="phase-panel primary-phase">
                   <h2>Prepare Mados</h2>
                   <p>Discard any Mados you do not want to carry into combat.</p>
                   <div className="mado-grid">
@@ -558,7 +563,7 @@ export function App() {
                 </div>
               ) : null}
               {game.status === "attack_declaration" ? (
-                <div className="phase-panel">
+                <div className="phase-panel primary-phase">
                   <h2>Choose attack</h2>
                   <p>Pick one living opponent or pass this round.</p>
                   <div className="target-list">
@@ -583,7 +588,7 @@ export function App() {
                 </div>
               ) : null}
               {game.status === "battle_resolution" ? (
-                <div className="phase-panel">
+                <div className="phase-panel primary-phase">
                   <h2>{currentBattle ? `Battle vs ${currentBattle.opponentName}` : "Matched battles"}</h2>
                   {currentBattle?.status === "active" ? (
                     <>
@@ -665,7 +670,7 @@ export function App() {
                 </div>
               ) : null}
               {game.status === "round_cleanup" ? (
-                <div className="phase-panel result-phase">
+                <div className="phase-panel primary-phase result-phase">
                   {showBattleResult && currentBattle?.lastExchange ? (
                     <>
                       <h2>Battle result</h2>
@@ -692,7 +697,7 @@ export function App() {
                 </div>
               ) : null}
               {game.status === "finished" ? (
-                <div className="phase-panel">
+                <div className="phase-panel primary-phase">
                   <h2>Game finished</h2>
                   <p>
                     {game.draw
@@ -701,26 +706,29 @@ export function App() {
                   </p>
                 </div>
               ) : null}
-              <div className="player-list" aria-label="Opponents">
-                {game.opponents.map((opponent) => (
-                  <div className="player-row" key={opponent.id}>
-                    <span>{opponent.name}</span>
-                    <FrequencyWheel
-                      label={`Known shield range for ${opponent.name}`}
-                      segment={opponent.insight.segment}
-                    />
-                    <small>
-                      {opponent.alive ? "alive" : "dead"}
-                      {" / "}
-                      {opponent.connected ? "online" : "offline"}
-                      {" / "}
-                      insight {opponent.insight.level}
-                    </small>
-                  </div>
-                ))}
-              </div>
+              <section className="phase-panel roster-panel" aria-labelledby="opponents-title">
+                <h2 id="opponents-title">Opponents</h2>
+                <div className="player-list" aria-label="Opponents">
+                  {game.opponents.map((opponent) => (
+                    <div className="player-row" key={opponent.id}>
+                      <span>{opponent.name}</span>
+                      <FrequencyWheel
+                        label={`Known shield range for ${opponent.name}`}
+                        segment={opponent.insight.segment}
+                      />
+                      <small>
+                        {opponent.alive ? "alive" : "dead"}
+                        {" / "}
+                        {opponent.connected ? "online" : "offline"}
+                        {" / "}
+                        insight {opponent.insight.level}
+                      </small>
+                    </div>
+                  ))}
+                </div>
+              </section>
               {canShareInsight ? (
-                <div className="phase-panel">
+                <div className="phase-panel insight-panel">
                   <h2>Share insight</h2>
                   {game.shareableInsights.length > 0 ? (
                     <>
@@ -777,7 +785,7 @@ export function App() {
                 </div>
               ) : null}
               {game.battleHistory.length > 0 ? (
-                <div className="phase-panel">
+                <div className="phase-panel history-panel">
                   <h2>Battle history</h2>
                   <div className="battle-list">
                     {game.battleHistory.slice(-6).map((entry) => (
