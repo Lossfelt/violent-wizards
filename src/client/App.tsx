@@ -19,6 +19,12 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL;
 const WHEEL_SIZE = 72;
 const WHEEL_CENTER = WHEEL_SIZE / 2;
 const WHEEL_RADIUS = 28;
+const ROUND_PHASES = [
+  { status: "round_prepare", label: "Prepare" },
+  { status: "attack_declaration", label: "Declare" },
+  { status: "battle_resolution", label: "Battle" },
+  { status: "round_cleanup", label: "Cleanup" },
+] as const;
 
 function getSessionId() {
   const existingSessionId = window.localStorage.getItem(SESSION_STORAGE_KEY);
@@ -87,6 +93,41 @@ function FrequencyWheel({
       ) : null}
       <line className="wheel-axis" x1={WHEEL_CENTER} x2={WHEEL_CENTER} y1="8" y2="14" />
     </svg>
+  );
+}
+
+function RoundProgress({
+  roundNumber,
+  status,
+}: {
+  roundNumber: number;
+  status: GameSnapshot["status"];
+}) {
+  const activeIndex = ROUND_PHASES.findIndex((phase) => phase.status === status);
+
+  return (
+    <nav className="round-progress" aria-label={`Round ${roundNumber} progress`}>
+      <span className="round-progress-label">Round {roundNumber}</span>
+      <ol className="round-steps">
+        {ROUND_PHASES.map((phase, index) => {
+          const isActive = index === activeIndex;
+          const isComplete =
+            status === "finished" || (activeIndex !== -1 && index < activeIndex);
+
+          return (
+            <li
+              aria-current={isActive ? "step" : undefined}
+              className="round-step"
+              data-active={isActive}
+              data-complete={isComplete}
+              key={phase.status}
+            >
+              <span>{phase.label}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -374,12 +415,7 @@ export function App() {
             <p className="eyebrow">Violent Wizards</p>
             <h1 id="app-title">Hide your frequency.</h1>
           </div>
-          {game ? (
-            <div className="header-pill">
-              Round {game.roundNumber}
-              <span>{game.status.replace("_", " ")}</span>
-            </div>
-          ) : null}
+          {game ? <RoundProgress roundNumber={game.roundNumber} status={game.status} /> : null}
         </header>
         <section className="lobby-panel" aria-label="Game controls">
           {!lobby && !game ? (
@@ -477,10 +513,6 @@ export function App() {
           ) : null}
           {game ? (
             <div className="game-room">
-              <div className="round-header">
-                <span>Round {game.roundNumber}</span>
-                <strong>{game.status.replace("_", " ")}</strong>
-              </div>
               <div className="self-grid">
                 <div>
                   <span>Health</span>

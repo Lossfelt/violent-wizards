@@ -72,24 +72,71 @@ h1 {
   letter-spacing: 0;
 }
 
-.header-pill {
+.round-progress {
   display: grid;
+  width: min(100%, 500px);
+  gap: 8px;
+  flex: 1 1 360px;
   justify-items: end;
-  gap: 4px;
-  flex: 0 0 auto;
-  border: 1px solid rgba(215, 181, 109, 0.24);
-  border-radius: 8px;
-  padding: 10px 12px;
-  color: #f5efe4;
-  background: rgba(215, 181, 109, 0.08);
-  font-size: 0.82rem;
-  font-weight: 800;
 }
 
-.header-pill span {
+.round-progress-label {
   color: #d7b56d;
   font-size: 0.72rem;
-  text-transform: capitalize;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.round-steps {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.round-step {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  margin-right: -14px;
+  padding: 0 20px 0 14px;
+  color: rgba(245, 239, 228, 0.74);
+  background: #5d6770;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 14px 50%);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.round-step:first-child {
+  border-radius: 7px 0 0 7px;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%);
+}
+
+.round-step:last-child {
+  margin-right: 0;
+  border-radius: 0 7px 7px 0;
+}
+
+.round-step[data-complete="true"] {
+  color: #15110a;
+  background: #8ddfbc;
+}
+
+.round-step[data-active="true"] {
+  color: #15110a;
+  background: #d7b56d;
+}
+
+.round-step span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lobby-panel {
@@ -187,28 +234,11 @@ button:disabled {
   gap: 16px;
 }
 
-.round-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  border: 1px solid rgba(215, 181, 109, 0.26);
-  border-radius: 8px;
-  padding: 14px;
-  background: rgba(215, 181, 109, 0.08);
-}
-
-.round-header span,
 .self-grid span {
   color: #8f877a;
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
-}
-
-.round-header strong {
-  color: #d7b56d;
-  text-transform: capitalize;
 }
 
 .self-grid {
@@ -571,8 +601,14 @@ button:disabled {
     flex-direction: column;
   }
 
-  .header-pill {
+  .round-progress {
     justify-items: start;
+  }
+
+  .round-step {
+    min-height: 32px;
+    padding: 0 16px 0 10px;
+    font-size: 0.66rem;
   }
 
   .mado-grid,
