@@ -7,8 +7,6 @@ import type {
   FrequencySegment,
   GameSnapshot,
   LobbySnapshot,
-  ServerHandshake,
-  ServerStatus,
   ServerToClientEvents,
 } from "../shared";
 
@@ -139,8 +137,6 @@ export function App() {
   const sessionId = useMemo(getSessionId, []);
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("connecting");
-  const [handshake, setHandshake] = useState<ServerHandshake | null>(null);
-  const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null);
   const [playerName, setPlayerName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [lobby, setLobby] = useState<LobbySnapshot | null>(null);
@@ -180,8 +176,6 @@ export function App() {
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
     socket.on("connect_error", handleConnectError);
-    socket.on("server:handshake", setHandshake);
-    socket.on("server:status", setServerStatus);
     socket.on("lobby:updated", setLobby);
     function handleGameUpdate(snapshot: GameSnapshot) {
       setGame(snapshot);
@@ -195,8 +189,6 @@ export function App() {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
       socket.off("connect_error", handleConnectError);
-      socket.off("server:handshake", setHandshake);
-      socket.off("server:status", setServerStatus);
       socket.off("lobby:updated", setLobby);
       socket.off("game:updated", handleGameUpdate);
       socket.disconnect();
@@ -815,18 +807,6 @@ export function App() {
             <div>
               <dt>Socket target</dt>
               <dd>{SERVER_URL || "/socket.io proxy"}</dd>
-            </div>
-            <div>
-              <dt>Socket ID</dt>
-              <dd>{handshake?.socketId ?? "Waiting"}</dd>
-            </div>
-            <div>
-              <dt>Clients</dt>
-              <dd>{serverStatus?.connectedClients ?? 0}</dd>
-            </div>
-            <div>
-              <dt>Server time</dt>
-              <dd>{handshake?.serverTime ?? "Waiting"}</dd>
             </div>
           </dl>
         </details>
