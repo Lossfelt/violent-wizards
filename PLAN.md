@@ -6,6 +6,24 @@
 - Mobil skal ikke være én lang kolonne: den skal ha minimal topp, fasebar, hovedhandling som primær flate, fast bunnstatus med egen helse og ikonknapper for sekundære paneler.
 - Ikke implementer konseptdata som bryter spillreglene eller dagens modell: motstanders helse/skjold-tall, shield-health, timer og ekstra Mado-slot 6.
 
+## Progress
+- [x] Avklart at konseptbildet er godkjent visuell retning.
+- [x] Avklart at `PLAN.md` skal oppdateres direkte.
+- [x] Avklart at `lucide-react` kan legges til.
+- [x] Funnet utviklingsinstruksjoner i `C:\Users\LevinLøssfelt\.codex\DEVELOPMENT.md`.
+- [x] Installert `lucide-react`.
+- [x] Milepæl 1: Komponentisert UI-struktur, mobil-HUD og drawers.
+  - `App.tsx` er delt opp i UI-flater for header, fasepanel, spillerstatus, Mado-grid, opponents, share insight, battle history, drawer og mobil bunnbar.
+  - `styles.css` har første pass for mørk fantasy-HUD, desktop-sidepaneler og mobil drawers.
+  - `npm run typecheck` passerer.
+- [x] Milepæl 2: Konseptnær styling for mobil først og desktop/tablet.
+  - Mobil lobby er justert til `scrollWidth=clientWidth`, uten horisontal overflow.
+  - Mobil game-view viser kompakt brand, fasebar, primærhandling og fast bunn-HUD i første viewport.
+  - Desktop game-view viser venstre spillerstatus, stor primærfase og høyre sidepaneler.
+  - Drawer-visning er sjekket og duplisert paneltittel er fjernet i drawer.
+  - `npm run typecheck` passerer etter stylingendringene.
+- [ ] Milepæl 3: Typecheck, tester, build og rendered QA.
+
 ## Key Changes
 - Legg til `lucide-react` for diskrete ikoner.
 - Komponentiser `App.tsx` rundt UI-flater:
