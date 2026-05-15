@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import QRCode from "qrcode";
 import {
   ChevronRight,
@@ -83,12 +83,8 @@ function clampPercent(value: number) {
   return `${Math.max(0, Math.min(100, value))}%`;
 }
 
-function insightRangeLabel(segment: FrequencySegment) {
-  if (segment.level === 0) {
-    return "unknown range";
-  }
-
-  return `${Math.round(segment.start)} to ${Math.round(segment.end)} deg`;
+function frequencyMarkerStyle(frequency: number) {
+  return { "--mado-frequency": `${frequency}deg` } as CSSProperties;
 }
 
 function FrequencyWheel({
@@ -410,8 +406,19 @@ function PlayerStatusPanel({ game }: { game: GameSnapshot }) {
         <span>Your mados</span>
         <div>
           {game.currentPlayer.madoSlots.map((mado, index) => (
-            <span className="mini-mado" data-empty={mado === null} key={mado?.id ?? `mini-${index}`}>
+            <span
+              aria-label={
+                mado
+                  ? `Mado ${index + 1}, frequency ${Math.round(mado.frequency)} degrees`
+                  : `Mado ${index + 1}, empty`
+              }
+              className="mini-mado"
+              data-empty={mado === null}
+              key={mado?.id ?? `mini-${index}`}
+              style={mado ? frequencyMarkerStyle(mado.frequency) : undefined}
+            >
               {index + 1}
+              {mado ? <span className="mini-mado-marker" aria-hidden="true" /> : null}
             </span>
           ))}
         </div>
@@ -694,7 +701,7 @@ function OpponentsPanel({ game }: { game: GameSnapshot }) {
               segment={opponent.insight.segment}
             />
             <small className="insight-copy">
-              insight {opponent.insight.level} / {insightRangeLabel(opponent.insight.segment)}
+              insight {opponent.insight.level}
             </small>
           </div>
         ))}
