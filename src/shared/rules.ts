@@ -10,7 +10,7 @@ import type {
 } from "./gameTypes.js";
 
 export const MAX_MADOS = 5;
-export const STARTING_HEALTH = 100;
+export const STARTING_HEALTH = 200;
 export const MADO_BASE_DAMAGE = 25;
 export const MIN_FREQUENCY = 0;
 export const MAX_FREQUENCY = 359;

@@ -125,6 +125,7 @@ export type CurrentBattleSnapshot = RoundBattlePreview & {
   waitingForPlayerIds: string[];
   fleeingPlayerIds: string[];
   usedMadoSlotIndexes: number[];
+  totalDamageTaken: number;
   lastExchange: LastExchangeSnapshot | null;
 };
 

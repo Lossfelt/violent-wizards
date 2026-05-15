@@ -12,7 +12,7 @@ sharing.
 
 Each wizard has:
 
-- 100 health
+- 200 health
 - One hidden shield frequency
 - Up to five Mados, magical torpedoes with their own frequencies
 - Partial insight into other players' shield frequencies

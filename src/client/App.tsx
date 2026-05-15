@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import QRCode from "qrcode";
 import {
+  BookOpen,
   ChevronRight,
   Copy,
   Heart,
@@ -157,9 +158,11 @@ function RoundProgress({
 function AppHeader({
   game,
   lobby,
+  onOpenRules,
 }: {
   game: GameSnapshot | null;
   lobby: LobbySnapshot | null;
+  onOpenRules: () => void;
 }) {
   const code = game?.code ?? lobby?.code ?? null;
 
@@ -178,16 +181,88 @@ function AppHeader({
         {!game ? <p className="brand-title">Violent Wizards</p> : null}
       </div>
       {game ? <RoundProgress roundNumber={game.roundNumber} status={game.status} /> : null}
-      {code ? (
-        <div className="room-code">
-          <span>Room code</span>
-          <strong>{code}</strong>
-          <button className="icon-button" type="button" aria-label="Copy room code" onClick={copyCode}>
-            <Copy size={17} aria-hidden="true" />
-          </button>
-        </div>
-      ) : null}
+      <div className="header-actions">
+        <button className="rules-button" type="button" onClick={onOpenRules}>
+          <BookOpen size={17} aria-hidden="true" />
+          <span>Rules</span>
+        </button>
+        {code ? (
+          <div className="room-code">
+            <span>Room code</span>
+            <strong>{code}</strong>
+            <button className="icon-button" type="button" aria-label="Copy room code" onClick={copyCode}>
+              <Copy size={17} aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
+      </div>
     </header>
+  );
+}
+
+function RulesModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="rules-modal" role="presentation">
+      <button className="modal-backdrop" aria-label="Close rules" onClick={onClose} type="button" />
+      <section className="rules-dialog" aria-labelledby="rules-title" aria-modal="true" role="dialog">
+        <header className="rules-header">
+          <div className="panel-title">
+            <BookOpen size={22} aria-hidden="true" />
+            <h2 id="rules-title">Rules and setting</h2>
+          </div>
+          <button className="icon-button" aria-label="Close rules" onClick={onClose} type="button">
+            <X size={20} aria-hidden="true" />
+          </button>
+        </header>
+        <div className="rules-content">
+          <section className="rules-section">
+            <h3>The premise</h3>
+            <p>
+              Every wizard hides behind an invisible shield tuned to a secret frequency.
+              Your Mados are living magical torpedoes, each with their own frequency.
+              The closer a Mado is to an enemy shield frequency, the more damage gets through.
+            </p>
+          </section>
+          <section className="rules-section">
+            <h3>Round flow</h3>
+            <ol>
+              <li>Prepare: keep or discard Mados. Empty slots refill next round.</li>
+              <li>Declare: attack one living opponent, or pass.</li>
+              <li>Battle: matched opponents resolve simultaneous exchanges.</li>
+              <li>Cleanup: spent Mados are removed, dead players fall, and the host starts the next round.</li>
+            </ol>
+          </section>
+          <section className="rules-section">
+            <h3>Battle rules</h3>
+            <ol>
+              <li>The first exchange requires a Mado if you have one available.</li>
+              <li>After that, choose another Mado, flee, or end if the opponent is fleeing.</li>
+              <li>Fleeing reduces incoming damage over repeated escape exchanges.</li>
+              <li>A battle ends when both stop, both run out of Mados, or one runs out while the other flees.</li>
+            </ol>
+          </section>
+          <section className="rules-section">
+            <h3>Insight and victory</h3>
+            <p>
+              Dealing damage gives insight into that opponent's shield frequency. Higher insight narrows
+              the known range and can be shared with other living players outside active battles. The last
+              living wizard wins. If nobody survives, the game is a draw.
+            </p>
+          </section>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -482,6 +557,7 @@ function PrimaryPhasePanel({
   isFleeing,
   isGameHost,
   lastDamageTaken,
+  totalBattleDamageTaken,
   mustChooseBattleAction,
   selectedDiscardSlots,
   showBattleResult,
@@ -499,6 +575,7 @@ function PrimaryPhasePanel({
   isFleeing: boolean;
   isGameHost: boolean;
   lastDamageTaken: number;
+  totalBattleDamageTaken: number;
   mustChooseBattleAction: boolean;
   selectedDiscardSlots: number[];
   showBattleResult: boolean;
@@ -509,9 +586,14 @@ function PrimaryPhasePanel({
   toggleDiscardSlot: (slotIndex: number) => void;
   winnerName: string | undefined;
 }) {
+  const primaryPhaseClassName = "phase-panel primary-phase phase-transition";
+  const exchangeImpactKey = currentBattle?.lastExchange
+    ? `${currentBattle.id}-${currentBattle.lastExchange.index}`
+    : null;
+
   if (game.status === "round_prepare") {
     return (
-      <section className="phase-panel primary-phase">
+      <section className={primaryPhaseClassName}>
         <div className="phase-heading">
           <h2>Prepare Mados</h2>
           <p>Choose which Mados to discard this round.</p>
@@ -537,7 +619,7 @@ function PrimaryPhasePanel({
 
   if (game.status === "attack_declaration") {
     return (
-      <section className="phase-panel primary-phase">
+      <section className={primaryPhaseClassName}>
         <div className="phase-heading">
           <h2>Choose attack</h2>
           <p>Pick one living opponent or pass this round.</p>
@@ -568,17 +650,25 @@ function PrimaryPhasePanel({
 
   if (game.status === "battle_resolution") {
     return (
-      <section className="phase-panel primary-phase">
+      <section className={primaryPhaseClassName}>
         <div className="phase-heading">
           <h2>{currentBattle ? `Battle vs ${currentBattle.opponentName}` : "Matched battles"}</h2>
           <p>Resolve declared battles without revealing hidden shield values.</p>
         </div>
         {currentBattle?.status === "active" ? (
           <>
+            {exchangeImpactKey ? (
+              <div className="exchange-impact" key={exchangeImpactKey} aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+            ) : null}
             {currentBattle.lastExchange ? (
-              <div className="battle-result-card">
+              <div className="battle-result-card exchange-card" aria-live="polite">
                 <span>Last exchange</span>
                 <strong>{lastDamageTaken} damage taken</strong>
+                <small>{totalBattleDamageTaken} total in this battle</small>
               </div>
             ) : null}
             {isFleeing ? (
@@ -636,7 +726,7 @@ function PrimaryPhasePanel({
 
   if (game.status === "round_cleanup") {
     return (
-      <section className="phase-panel primary-phase result-phase">
+      <section className={`${primaryPhaseClassName} result-phase`}>
         {showBattleResult && currentBattle?.lastExchange ? (
           <>
             <div className="phase-heading">
@@ -646,6 +736,7 @@ function PrimaryPhasePanel({
             <div className="battle-result-card large">
               <span>Final exchange</span>
               <strong>{lastDamageTaken} damage taken</strong>
+              <small>{totalBattleDamageTaken} total in this battle</small>
             </div>
           </>
         ) : (
@@ -669,7 +760,7 @@ function PrimaryPhasePanel({
   }
 
   return (
-    <section className="phase-panel primary-phase">
+    <section className={primaryPhaseClassName}>
       <div className="phase-heading">
         <h2>Game finished</h2>
         <p>{game.draw ? "The game ended in a draw." : `${winnerName ?? "Unknown"} wins.`}</p>
@@ -908,6 +999,7 @@ export function App() {
   const [shareTargetId, setShareTargetId] = useState("");
   const [showBattleResult, setShowBattleResult] = useState(false);
   const [activeDrawer, setActiveDrawer] = useState<DrawerId | null>(null);
+  const [isRulesOpen, setIsRulesOpen] = useState(false);
 
   useEffect(() => {
     const codeFromUrl = new URLSearchParams(window.location.search).get("code");
@@ -1115,6 +1207,9 @@ export function App() {
   const lastExchange = currentBattle?.lastExchange ?? null;
   const lastDamageTaken =
     game && lastExchange ? Math.ceil(lastExchange.damageTaken) : 0;
+  const totalBattleDamageTaken = currentBattle
+    ? Math.ceil(currentBattle.totalDamageTaken)
+    : 0;
   const mustChooseBattleAction =
     currentBattle?.waitingForPlayerIds.includes(game?.currentPlayer.id ?? "") ?? false;
   const isFleeing =
@@ -1154,7 +1249,7 @@ export function App() {
     }
 
     setShowBattleResult(true);
-    const timeoutId = window.setTimeout(() => setShowBattleResult(false), 2400);
+    const timeoutId = window.setTimeout(() => setShowBattleResult(false), 3600);
 
     return () => window.clearTimeout(timeoutId);
   }, [currentBattle?.id, currentBattle?.lastExchange?.index, game?.status]);
@@ -1176,11 +1271,14 @@ export function App() {
       setShareTargetId={setShareTargetId}
     />
   ) : null;
+  const phaseAnimationKey = game
+    ? `${game.status}-${currentBattle?.id ?? "none"}-${currentBattle?.lastExchange?.index ?? "ready"}`
+    : "lobby";
 
   return (
     <main className={game ? "app-shell game-shell" : "app-shell"}>
       <section className={game ? "intro-panel game-table" : "intro-panel"} aria-labelledby="app-title">
-        <AppHeader game={game} lobby={lobby} />
+        <AppHeader game={game} lobby={lobby} onOpenRules={() => setIsRulesOpen(true)} />
         <section className="lobby-panel" aria-label="Game controls">
           {!game ? (
             <LobbyPanel
@@ -1205,6 +1303,7 @@ export function App() {
             <div className="game-room">
               <PlayerStatusPanel game={game} />
               <PrimaryPhasePanel
+                key={phaseAnimationKey}
                 currentBattle={currentBattle}
                 game={game}
                 hasSubmittedAttack={hasSubmittedAttack}
@@ -1212,6 +1311,7 @@ export function App() {
                 isFleeing={isFleeing}
                 isGameHost={isGameHost}
                 lastDamageTaken={lastDamageTaken}
+                totalBattleDamageTaken={totalBattleDamageTaken}
                 mustChooseBattleAction={mustChooseBattleAction}
                 selectedDiscardSlots={selectedDiscardSlots}
                 showBattleResult={showBattleResult}
@@ -1231,6 +1331,7 @@ export function App() {
             </div>
           )}
         </section>
+        {isRulesOpen ? <RulesModal onClose={() => setIsRulesOpen(false)} /> : null}
         {!game ? (
           <ConnectionStatus
             connectionError={connectionError}

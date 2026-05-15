@@ -163,6 +163,10 @@ function createCurrentBattleSnapshot(
   const opponentId =
     battle.playerAId === currentPlayerId ? battle.playerBId : battle.playerAId;
   const lastExchange = battle.exchanges.at(-1) ?? null;
+  const totalDamageTaken = battle.exchanges.reduce(
+    (total, exchange) => total + (exchange.damageByPlayerId[currentPlayerId] ?? 0),
+    0,
+  );
 
   return {
     ...preview,
@@ -180,6 +184,7 @@ function createCurrentBattleSnapshot(
     usedMadoSlotIndexes: [
       ...(battle.usedMadoSlotIndexesByPlayerId[currentPlayerId] ?? new Set<number>()),
     ],
+    totalDamageTaken,
     lastExchange: lastExchange
       ? {
           index: lastExchange.index,
