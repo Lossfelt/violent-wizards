@@ -22,7 +22,13 @@
   - Desktop game-view viser venstre spillerstatus, stor primærfase og høyre sidepaneler.
   - Drawer-visning er sjekket og duplisert paneltittel er fjernet i drawer.
   - `npm run typecheck` passerer etter stylingendringene.
-- [ ] Milepæl 3: Typecheck, tester, build og rendered QA.
+- [x] Milepæl 3: Typecheck, tester, build og rendered QA.
+  - `npm test` passerer: 38 tester.
+  - `npm run build` passerer: typecheck, klientbuild og serverbuild.
+  - Rendered QA kjørt med ekte tospillerflyt via socket: lobby, round prepare, attack declaration, battle resolution, round cleanup og drawers.
+  - Ekstra socket-QA kjørt til `finished` state. Spillet nådde `finished` i runde 2.
+  - Mobil og desktop ble målt uten horisontal overflow (`scrollWidth === clientWidth`).
+  - In-app Browser kunne laste appen og lese DOM uten relevante errors, men screenshot/klikk via Browser CDP timet ut. Edge DevTools ble brukt som screenshot-fallback.
 
 ## Key Changes
 - Legg til `lucide-react` for diskrete ikoner.
