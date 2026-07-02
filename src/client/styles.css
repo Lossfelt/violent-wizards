@@ -387,9 +387,122 @@ h1 {
 .game-room {
   display: grid;
   grid-template-columns: minmax(230px, 0.56fr) minmax(360px, 1.24fr) minmax(290px, 0.72fr);
-  grid-template-areas: "status phase side";
+  grid-template-areas:
+    "hud hud hud"
+    "status phase side";
   gap: 14px;
   align-items: stretch;
+}
+
+.game-hud {
+  grid-area: hud;
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1.15fr)
+    minmax(140px, 0.9fr)
+    minmax(112px, 0.7fr)
+    minmax(112px, 0.7fr)
+    minmax(160px, 1fr);
+  gap: 10px;
+}
+
+.hud-cell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 9px;
+  align-items: center;
+  min-height: 78px;
+  border: 1px solid rgba(245, 232, 202, 0.13);
+  border-radius: 8px;
+  padding: 12px;
+  background:
+    linear-gradient(180deg, rgba(245, 232, 202, 0.07), rgba(245, 232, 202, 0.025)),
+    rgba(3, 5, 5, 0.7);
+  box-shadow: inset 0 1px 0 rgba(245, 232, 202, 0.06);
+}
+
+.hud-cell > svg:not(.frequency-wheel) {
+  grid-row: span 2;
+  color: var(--gold-2);
+}
+
+.hud-cell span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hud-cell strong {
+  color: var(--text);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.35rem, 2.4vw, 1.9rem);
+  line-height: 1;
+}
+
+.hud-health {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  border-color: rgba(240, 110, 99, 0.28);
+}
+
+.hud-health > svg {
+  color: var(--danger) !important;
+}
+
+.hud-health strong {
+  color: #ffb7ae;
+}
+
+.hud-meter {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  height: 8px;
+  border: 1px solid rgba(245, 232, 202, 0.13);
+  border-radius: 999px;
+  background: rgba(245, 232, 202, 0.07);
+}
+
+.hud-meter span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #db5049, #f18973);
+}
+
+.hud-cell .frequency-wheel {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  justify-self: end;
+  width: 54px;
+  height: 54px;
+}
+
+.hud-phase {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  border-color: rgba(245, 210, 122, 0.36);
+}
+
+.hud-phase span,
+.hud-phase strong,
+.hud-phase small {
+  grid-column: 1;
+}
+
+.hud-phase strong {
+  color: var(--gold-2);
+}
+
+.hud-phase small {
+  color: var(--teal);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
 }
 
 .player-status-panel {
@@ -576,8 +689,23 @@ h1 {
   align-content: center;
   border-color: var(--border);
   background:
+    radial-gradient(circle at 50% 44%, rgba(94, 224, 194, 0.13), transparent 12rem),
     linear-gradient(180deg, rgba(214, 168, 71, 0.08), rgba(245, 232, 202, 0.028)),
     rgba(6, 8, 8, 0.82);
+}
+
+.primary-phase::before {
+  content: "";
+  position: absolute;
+  inset: 16px;
+  border: 1px solid rgba(214, 168, 71, 0.16);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, transparent 49.8%, rgba(245, 232, 202, 0.08) 50%, transparent 50.2%),
+    linear-gradient(0deg, transparent 49.8%, rgba(245, 232, 202, 0.08) 50%, transparent 50.2%);
+  mask-image: radial-gradient(circle, black 0 18rem, transparent 25rem);
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .primary-phase > :not(.exchange-impact) {
@@ -629,6 +757,7 @@ h1 {
 }
 
 .mado-button {
+  position: relative;
   display: grid;
   min-height: 124px;
   gap: 8px;
@@ -637,8 +766,12 @@ h1 {
   padding: 12px 8px;
   border-color: rgba(214, 168, 71, 0.58);
   background:
+    radial-gradient(circle at 50% 32%, rgba(94, 224, 194, 0.09), transparent 3rem),
     linear-gradient(145deg, rgba(245, 232, 202, 0.07), rgba(245, 232, 202, 0.025)),
     rgba(5, 7, 7, 0.72);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(245, 232, 202, 0.06);
 }
 
 .mado-button[data-selected="true"] {
@@ -649,6 +782,21 @@ h1 {
   box-shadow:
     0 0 0 1px rgba(240, 110, 99, 0.2),
     inset 0 0 30px rgba(240, 110, 99, 0.08);
+}
+
+.mado-button[data-selected="true"]::after {
+  content: "Discard";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: 1px solid rgba(240, 110, 99, 0.55);
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: #ffd8d2;
+  background: rgba(95, 22, 24, 0.72);
+  font-size: 0.64rem;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .mado-button strong {
@@ -662,6 +810,12 @@ h1 {
   color: var(--muted);
   font-size: 0.76rem;
   font-weight: 800;
+}
+
+.mado-button .mado-frequency-label {
+  color: var(--teal);
+  font-size: 0.72rem;
+  text-transform: uppercase;
 }
 
 .mado-button .frequency-wheel {
@@ -1175,8 +1329,13 @@ h1 {
   .game-room {
     grid-template-columns: minmax(220px, 0.62fr) minmax(340px, 1fr);
     grid-template-areas:
+      "hud hud"
       "status phase"
       "side side";
+  }
+
+  .game-hud {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .desktop-side-panels {
@@ -1267,31 +1426,75 @@ h1 {
   .game-room {
     grid-template-columns: 1fr;
     grid-template-areas:
+      "hud"
       "phase"
       "status";
     gap: 12px;
   }
 
+  .game-hud {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hud-cell {
+    min-height: 68px;
+    padding: 10px;
+  }
+
+  .hud-cell strong {
+    font-size: 1.25rem;
+  }
+
+  .hud-cell .frequency-wheel {
+    width: 42px;
+    height: 42px;
+  }
+
+  .hud-phase {
+    display: none;
+  }
+
   .primary-phase {
     min-height: min(70vh, 620px);
-    padding: 18px 12px;
+    padding: 14px 12px;
   }
 
   .phase-heading {
-    gap: 12px;
+    gap: 8px;
   }
 
   .phase-panel h2 {
-    font-size: clamp(1.6rem, 9vw, 2.35rem);
+    font-size: clamp(1.45rem, 8vw, 2rem);
   }
 
   .mado-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(128px, 1fr));
     gap: 9px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 2px 2px 8px;
+    scroll-snap-type: x proximity;
   }
 
   .mado-button {
-    min-height: 132px;
+    min-height: 108px;
+    scroll-snap-align: center;
+  }
+
+  .mado-button strong {
+    font-size: 2rem;
+  }
+
+  .mado-button .frequency-wheel {
+    width: 44px;
+    height: 44px;
+  }
+
+  .action-button {
+    position: sticky;
+    bottom: 76px;
+    z-index: 2;
+    min-height: 52px;
   }
 
   .player-status-panel {
@@ -1433,8 +1636,17 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  .game-hud {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .hud-cell span {
+    font-size: 0.66rem;
+  }
+
   .mado-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(128px, 1fr));
   }
 
   .status-identity strong {

@@ -442,6 +442,54 @@ function LobbyPanel({
   );
 }
 
+function GameHud({ game }: { game: GameSnapshot }) {
+  const health = Math.ceil(game.currentPlayer.health);
+  const healthPercent = clampPercent((health / STARTING_HEALTH) * 100);
+  const filledMados = game.currentPlayer.madoSlots.filter(Boolean).length;
+  const liveOpponents = game.opponents.filter((opponent) => opponent.alive).length;
+  const currentPhase =
+    ROUND_PHASES.find((phase) => phase.status === game.status)?.label ??
+    (game.status === "finished" ? "Finished" : "Lobby");
+
+  return (
+    <section className="game-hud" aria-label="Current game status">
+      <div className="hud-cell hud-health">
+        <Heart size={18} aria-hidden="true" />
+        <span>Health</span>
+        <strong>{health}</strong>
+        <div className="hud-meter" aria-hidden="true">
+          <span style={{ width: healthPercent }} />
+        </div>
+      </div>
+      <div className="hud-cell">
+        <Shield size={18} aria-hidden="true" />
+        <span>Shield</span>
+        <FrequencyWheel
+          label="Your shield frequency"
+          marker={game.currentPlayer.shieldFrequency}
+        />
+      </div>
+      <div className="hud-cell">
+        <Radio size={18} aria-hidden="true" />
+        <span>Mados</span>
+        <strong>
+          {filledMados}/{MAX_MADOS}
+        </strong>
+      </div>
+      <div className="hud-cell">
+        <Swords size={18} aria-hidden="true" />
+        <span>Opponents</span>
+        <strong>{liveOpponents}</strong>
+      </div>
+      <div className="hud-cell hud-phase">
+        <span>Phase</span>
+        <strong>{currentPhase}</strong>
+        <small>Round {game.roundNumber}</small>
+      </div>
+    </section>
+  );
+}
+
 function PlayerStatusPanel({ game }: { game: GameSnapshot }) {
   const health = Math.ceil(game.currentPlayer.health);
   const healthPercent = clampPercent((health / STARTING_HEALTH) * 100);
@@ -538,7 +586,10 @@ function MadoSlotGrid({
           >
             <strong>{index + 1}</strong>
             {mado ? (
-              <FrequencyWheel label={`Mado slot ${index + 1}`} marker={mado.frequency} />
+              <>
+                <FrequencyWheel label={`Mado slot ${index + 1}`} marker={mado.frequency} />
+                <span className="mado-frequency-label">{Math.round(mado.frequency)} deg</span>
+              </>
             ) : (
               <span>Empty</span>
             )}
@@ -596,7 +647,7 @@ function PrimaryPhasePanel({
       <section className={primaryPhaseClassName}>
         <div className="phase-heading">
           <h2>Prepare Mados</h2>
-          <p>Choose which Mados to discard this round.</p>
+          <p>Select any Mados you want to throw away. Empty slots refill next round.</p>
         </div>
         <MadoSlotGrid
           disabled={hasSubmittedDiscard}
@@ -622,7 +673,7 @@ function PrimaryPhasePanel({
       <section className={primaryPhaseClassName}>
         <div className="phase-heading">
           <h2>Choose attack</h2>
-          <p>Pick one living opponent or pass this round.</p>
+          <p>Pick one living opponent, or pass to stay hidden this round.</p>
         </div>
         <div className="target-list">
           {game.opponents
@@ -1301,6 +1352,7 @@ export function App() {
             />
           ) : (
             <div className="game-room">
+              <GameHud game={game} />
               <PlayerStatusPanel game={game} />
               <PrimaryPhasePanel
                 key={phaseAnimationKey}
