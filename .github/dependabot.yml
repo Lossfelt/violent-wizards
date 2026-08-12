@@ -1,0 +1,31 @@
+# Dependabot-konfigurasjon.
+#
+# Minor- og patch-oppdateringer samles i grupperte PR-er slik at et repo
+# gir en håndfull PR-er i uka, ikke en per pakke.
+#
+# Major-oppdateringer er bevisst holdt UTENFOR gruppene, og kommer derfor
+# som en PR per pakke. Det er med vilje: major-hopp krever manuell testing,
+# og skal ikke kunne bli med som blindpassasjer i en samle-PR.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Oslo
+    open-pull-requests-limit: 5
+    groups:
+      sikkerhetsoppdateringer:
+        applies-to: security-updates
+        patterns: ["*"]
+      utviklingsavhengigheter:
+        applies-to: version-updates
+        dependency-type: development
+        update-types: ["minor", "patch"]
+      produksjonsavhengigheter:
+        applies-to: version-updates
+        dependency-type: production
+        update-types: ["minor", "patch"]
+
