@@ -16,6 +16,14 @@ updates:
       time: "06:00"
       timezone: Europe/Oslo
     open-pull-requests-limit: 5
+    ignore:
+      # @types/node sine majorversjoner foelger Node sine. Repoet kjoerer
+      # Node 22 (se .node-version), saa typene skal ogsaa vaere 22.x.
+      # Uten denne regelen foreslaar Dependabot @types/node 24 og 26, som
+      # gir groenn typecheck mot API-er som ikke finnes i runtime.
+      # Naar .node-version heves, hev denne manuelt i samme slengen.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       sikkerhetsoppdateringer:
         applies-to: security-updates
