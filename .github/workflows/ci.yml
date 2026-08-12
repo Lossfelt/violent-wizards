@@ -21,7 +21,9 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          # Leser .node-version, samme fil som Netlify og Render bruker,
+          # slik at CI og produksjon ikke kan drifte fra hverandre.
+          node-version-file: .node-version
           cache: npm
 
       - run: npm ci
