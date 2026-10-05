@@ -37,3 +37,14 @@ updates:
         dependency-type: production
         update-types: ["minor", "patch"]
 
+  # Holder GitHub Actions (checkout, setup-node osv.) oppdatert.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Oslo
+    groups:
+      actions:
+        update-types: ["minor", "patch"]

@@ -39,3 +39,24 @@ jobs:
 
       - name: Build server
         run: npm run build:server
+
+  # Fletter Dependabot-PR-er automatisk når CI er grønn, men bare minor- og
+  # patch-oppdateringer. Major-hopp (også sikkerhetsoppdateringer som er
+  # major) blir liggende for manuell testing, i tråd med dependabot.yml.
+  # Flettes direkte i stedet for med "gh pr merge --auto", slik at det ikke
+  # krever branch protection eller "Allow auto-merge" i repoet.
+  dependabot-fletting:
+    needs: verify
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - id: metadata
+        uses: dependabot/fetch-metadata@v2
+      - if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge "$PR_URL" --squash --delete-branch
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
