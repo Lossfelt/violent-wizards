@@ -1,7 +1,7 @@
 import type {
-  Exchange,
+  EchoBand,
   ExchangeAction,
-  FrequencySegment,
+  FrequencyArc,
   GameStatus,
   InsightTransfer,
   Mado,
@@ -10,8 +10,9 @@ import type {
 export type AppPhase = "setup";
 
 export type {
-  FrequencySegment,
   Battle,
+  EchoBand,
+  FrequencyArc,
   Exchange,
   ExchangeAction,
   GameStatus,
@@ -25,32 +26,37 @@ export type {
 } from "./gameTypes.js";
 
 export {
+  ECHO_BANDS,
   FLEE_DAMAGE_MULTIPLIERS,
-  INSIGHT_NOISE_MAX,
-  INSIGHT_NOISE_MIN,
-  INSIGHT_SEGMENT_COUNTS,
-  INSIGHT_THRESHOLDS,
+  FREQUENCY_COUNT,
+  FULL_DAMAGE_DISTANCE,
   MADO_BASE_DAMAGE,
+  MADO_TUNE_RANGE,
   MAX_FREQUENCY,
   MAX_MADOS,
   MIN_FREQUENCY,
   STARTING_HEALTH,
-  addInsightFromDamage,
-  applySharedInsight,
+  ZERO_DAMAGE_DISTANCE,
+  applyEcho,
   calculateDamage,
   circularDistance,
   createInitialInsight,
   createMado,
   discardMados,
   fillEmptyMadoSlots,
-  getInsightLevel,
-  getInsightMinimumPoints,
-  getInsightSegment,
+  fleeMultiplierForRound,
+  getEchoBand,
+  isInsightNarrowed,
+  mergeSharedInsight,
   normalizeFrequency,
   randomFrequency,
   removeDeadPlayerInsights,
   resolveAttackDeclarations,
+  resolveMadoHit,
   resolveScriptedBattle,
+  toFrequencyArcs,
+  tuneMado,
+  tuneMadoFrequency,
 } from "./rules.js";
 
 export type ServerStatus = {
@@ -96,17 +102,17 @@ export type OpponentSnapshot = {
   alive: boolean;
   host: boolean;
   connected: boolean;
-  insight: {
-    level: number;
-    segment: FrequencySegment;
-  };
+  insight: KnownShieldSnapshot;
 };
 
-export type ShareableInsightSnapshot = {
+export type KnownShieldSnapshot = {
+  arcs: FrequencyArc[];
+  possibleCount: number;
+};
+
+export type ShareableInsightSnapshot = KnownShieldSnapshot & {
   targetPlayerId: string;
   targetName: string;
-  level: number;
-  segment: FrequencySegment;
 };
 
 export type RoundBattlePreview = {
@@ -132,6 +138,14 @@ export type CurrentBattleSnapshot = RoundBattlePreview & {
 export type LastExchangeSnapshot = {
   index: number;
   damageTaken: number;
+  // What your own Mado reported back, or null if you did not fire.
+  echo: EchoBand | null;
+  firedFrequency: number | null;
+};
+
+export type MadoTuning = {
+  slotIndex: number;
+  frequency: number;
 };
 
 export type PublicBattleHistoryEntry = {
@@ -190,7 +204,7 @@ export type ClientToServerEvents = {
   ) => void;
   "game:start": (acknowledge: (result: GameActionResult) => void) => void;
   "round:discard": (
-    payload: { slotIndexes: number[] },
+    payload: { slotIndexes: number[]; tuning?: MadoTuning | null },
     acknowledge: (result: GameActionResult) => void,
   ) => void;
   "round:attack": (

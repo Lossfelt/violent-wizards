@@ -1,7 +1,8 @@
 import type {
+  EchoBand,
   Exchange,
   ExchangeAction,
-  FrequencySegment,
+  FrequencyArc,
   InsightState,
   Mado,
   MatchmakingResult,
@@ -11,13 +12,22 @@ import type {
 
 export const MAX_MADOS = 5;
 export const STARTING_HEALTH = 200;
-export const MADO_BASE_DAMAGE = 25;
+export const MADO_BASE_DAMAGE = 30;
 export const MIN_FREQUENCY = 0;
 export const MAX_FREQUENCY = 359;
-export const INSIGHT_NOISE_MIN = 0.75;
-export const INSIGHT_NOISE_MAX = 1.25;
-export const INSIGHT_THRESHOLDS = [10, 25, 45, 70, 100] as const;
-export const INSIGHT_SEGMENT_COUNTS = [1, 2, 4, 8, 16, 32] as const;
+export const FREQUENCY_COUNT = MAX_FREQUENCY + 1;
+// Full damage inside this distance, falling linearly to zero at ZERO_DAMAGE_DISTANCE.
+export const FULL_DAMAGE_DISTANCE = 15;
+export const ZERO_DAMAGE_DISTANCE = 45;
+// Each shot reports which band its distance to the shield fell into. The first two
+// bands match the damage curve, so the echo also tells roughly how hard the hit was.
+export const ECHO_BANDS: ReadonlyArray<{ band: EchoBand; maxDistance: number }> = [
+  { band: "glowing", maxDistance: FULL_DAMAGE_DISTANCE },
+  { band: "warm", maxDistance: ZERO_DAMAGE_DISTANCE },
+  { band: "lukewarm", maxDistance: 90 },
+  { band: "cold", maxDistance: 180 },
+];
+export const MADO_TUNE_RANGE = 60;
 export const FLEE_DAMAGE_MULTIPLIERS = [0.5, 0.4, 0.3, 0.2, 0.1] as const;
 
 export function normalizeFrequency(frequency: number): number {
@@ -26,7 +36,7 @@ export function normalizeFrequency(frequency: number): number {
 }
 
 export function randomFrequency(random = Math.random): number {
-  return Math.floor(random() * (MAX_FREQUENCY + 1));
+  return Math.floor(random() * FREQUENCY_COUNT);
 }
 
 export function circularDistance(a: number, b: number): number {
@@ -40,95 +50,127 @@ export function calculateDamage(
   fleeMultiplier = 1,
 ): number {
   const distance = circularDistance(madoFrequency, shieldFrequency);
-  const match = 1 - distance / 180;
-  return MADO_BASE_DAMAGE * match * fleeMultiplier;
-}
 
-export function getInsightLevel(points: number): number {
-  let level = 0;
-
-  for (const threshold of INSIGHT_THRESHOLDS) {
-    if (points >= threshold) {
-      level += 1;
-    }
+  if (distance <= FULL_DAMAGE_DISTANCE) {
+    return MADO_BASE_DAMAGE * fleeMultiplier;
   }
 
-  return level;
-}
-
-export function getInsightMinimumPoints(level: number): number {
-  if (level <= 0) {
+  if (distance >= ZERO_DAMAGE_DISTANCE) {
     return 0;
   }
 
-  return INSIGHT_THRESHOLDS[level - 1] ?? INSIGHT_THRESHOLDS.at(-1)!;
+  const falloff =
+    (distance - FULL_DAMAGE_DISTANCE) / (ZERO_DAMAGE_DISTANCE - FULL_DAMAGE_DISTANCE);
+  return MADO_BASE_DAMAGE * (1 - falloff) * fleeMultiplier;
 }
 
-export function getInsightSegment(
-  shieldFrequency: number,
-  level: number,
-): FrequencySegment {
-  const boundedLevel = Math.max(0, Math.min(level, INSIGHT_SEGMENT_COUNTS.length - 1));
-  const segmentCount = INSIGHT_SEGMENT_COUNTS[boundedLevel];
-  const segmentWidth = 360 / segmentCount;
-  const index = Math.min(
-    segmentCount - 1,
-    Math.floor(normalizeFrequency(shieldFrequency) / segmentWidth),
+export function getEchoBand(distance: number): EchoBand {
+  return (
+    ECHO_BANDS.find((entry) => distance <= entry.maxDistance)?.band ??
+    ECHO_BANDS.at(-1)!.band
   );
-
-  return {
-    level: boundedLevel,
-    index,
-    start: index * segmentWidth,
-    end: (index + 1) * segmentWidth,
-  };
 }
 
-export function createInitialInsight(shieldFrequency: number): InsightState {
-  return {
-    points: 0,
-    level: 0,
-    segment: getInsightSegment(shieldFrequency, 0),
-  };
-}
-
-export function addInsightFromDamage(
-  current: InsightState | undefined,
+export function resolveMadoHit(
+  madoFrequency: number,
   shieldFrequency: number,
-  actualDamage: number,
-  random = Math.random,
-): InsightState {
-  const existing = current ?? createInitialInsight(shieldFrequency);
-  const noise =
-    INSIGHT_NOISE_MIN + random() * (INSIGHT_NOISE_MAX - INSIGHT_NOISE_MIN);
-  const points = existing.points + Math.max(0, actualDamage) * noise;
-  const level = getInsightLevel(points);
-
+  fleeMultiplier = 1,
+): { damage: number; echo: EchoBand } {
   return {
-    points,
-    level,
-    segment: getInsightSegment(shieldFrequency, level),
+    damage: calculateDamage(madoFrequency, shieldFrequency, fleeMultiplier),
+    echo: getEchoBand(circularDistance(madoFrequency, shieldFrequency)),
   };
 }
 
-export function applySharedInsight(
-  receiverCurrent: InsightState | undefined,
-  targetShieldFrequency: number,
-  sharedLevel: number,
-): InsightState {
-  const current = receiverCurrent ?? createInitialInsight(targetShieldFrequency);
+export function fleeMultiplierForRound(fleeRoundIndex: number): number {
+  return FLEE_DAMAGE_MULTIPLIERS[
+    Math.max(0, Math.min(fleeRoundIndex, FLEE_DAMAGE_MULTIPLIERS.length - 1))
+  ]!;
+}
 
-  if (current.level > sharedLevel) {
-    return current;
+export function createInitialInsight(): InsightState {
+  return {
+    candidates: Array.from({ length: FREQUENCY_COUNT }, (_, frequency) => frequency),
+  };
+}
+
+export function isInsightNarrowed(insight: InsightState | undefined): boolean {
+  return insight !== undefined && insight.candidates.length < FREQUENCY_COUNT;
+}
+
+export function applyEcho(
+  current: InsightState | undefined,
+  madoFrequency: number,
+  echo: EchoBand,
+): InsightState {
+  const existing = current ?? createInitialInsight();
+
+  return {
+    candidates: existing.candidates.filter(
+      (frequency) => getEchoBand(circularDistance(madoFrequency, frequency)) === echo,
+    ),
+  };
+}
+
+export function mergeSharedInsight(
+  receiverCurrent: InsightState | undefined,
+  shared: InsightState,
+): InsightState {
+  const current = receiverCurrent ?? createInitialInsight();
+  const sharedCandidates = new Set(shared.candidates);
+
+  return {
+    candidates: current.candidates.filter((frequency) => sharedCandidates.has(frequency)),
+  };
+}
+
+export function toFrequencyArcs(candidates: number[]): FrequencyArc[] {
+  if (candidates.length >= FREQUENCY_COUNT) {
+    return [{ start: 0, end: 360 }];
   }
 
-  const level = Math.max(current.level, sharedLevel);
-  const points = Math.max(current.points, getInsightMinimumPoints(level));
+  const sorted = [...new Set(candidates.map(normalizeFrequency))].sort((a, b) => a - b);
+  const arcs: FrequencyArc[] = [];
 
+  for (const frequency of sorted) {
+    const last = arcs.at(-1);
+
+    if (last && last.end === frequency) {
+      last.end = frequency + 1;
+    } else {
+      arcs.push({ start: frequency, end: frequency + 1 });
+    }
+  }
+
+  const first = arcs[0];
+  const last = arcs.at(-1);
+
+  // Join an arc that runs past 359 with the one starting at 0.
+  if (arcs.length > 1 && first && last && first.start === 0 && last.end === 360) {
+    arcs.shift();
+    last.end = 360 + first.end;
+  }
+
+  return arcs;
+}
+
+export function tuneMadoFrequency(currentFrequency: number, targetFrequency: number): number {
+  const delta =
+    ((normalizeFrequency(targetFrequency) - normalizeFrequency(currentFrequency) + 540) % 360) -
+    180;
+  const clampedDelta = Math.max(-MADO_TUNE_RANGE, Math.min(MADO_TUNE_RANGE, delta));
+
+  return normalizeFrequency(Math.round(currentFrequency + clampedDelta));
+}
+
+export function tuneMado(player: Player, slotIndex: number, targetFrequency: number): Player {
   return {
-    points,
-    level,
-    segment: getInsightSegment(targetShieldFrequency, level),
+    ...player,
+    madoSlots: player.madoSlots.map((mado, index) =>
+      index === slotIndex && mado
+        ? { ...mado, frequency: tuneMadoFrequency(mado.frequency, targetFrequency) }
+        : mado,
+    ),
   };
 }
 
@@ -382,35 +424,32 @@ export function resolveScriptedBattle(
       [playerA.id]: 0,
       [playerB.id]: 0,
     };
+    const echoByAttackerId: Record<string, EchoBand | null> = {
+      [playerA.id]: null,
+      [playerB.id]: null,
+    };
     const usedThisExchange: Record<string, number[]> = {
       [playerA.id]: [],
       [playerB.id]: [],
     };
 
-    if (actionA.type === "mado") {
-      const mado = playerA.madoSlots[actionA.madoSlotIndex]!;
-      const fleeMultiplier = fleeingPlayerIds.has(playerB.id)
-        ? FLEE_DAMAGE_MULTIPLIERS[
-            Math.min(fleeRoundsByPlayerId[playerB.id] - 1, FLEE_DAMAGE_MULTIPLIERS.length - 1)
-          ]
-        : 1;
-      const damage = calculateDamage(mado.frequency, playerB.shieldFrequency, fleeMultiplier);
-      damageByPlayerId[playerB.id] = damage;
-      usedSlotsByPlayerId[playerA.id]!.add(actionA.madoSlotIndex);
-      usedThisExchange[playerA.id]!.push(actionA.madoSlotIndex);
-    }
+    for (const [attacker, defender, action] of [
+      [playerA, playerB, actionA],
+      [playerB, playerA, actionB],
+    ] as const) {
+      if (action.type !== "mado") {
+        continue;
+      }
 
-    if (actionB.type === "mado") {
-      const mado = playerB.madoSlots[actionB.madoSlotIndex]!;
-      const fleeMultiplier = fleeingPlayerIds.has(playerA.id)
-        ? FLEE_DAMAGE_MULTIPLIERS[
-            Math.min(fleeRoundsByPlayerId[playerA.id] - 1, FLEE_DAMAGE_MULTIPLIERS.length - 1)
-          ]
+      const mado = attacker.madoSlots[action.madoSlotIndex]!;
+      const fleeMultiplier = fleeingPlayerIds.has(defender.id)
+        ? fleeMultiplierForRound(fleeRoundsByPlayerId[defender.id]! - 1)
         : 1;
-      const damage = calculateDamage(mado.frequency, playerA.shieldFrequency, fleeMultiplier);
-      damageByPlayerId[playerA.id] = damage;
-      usedSlotsByPlayerId[playerB.id]!.add(actionB.madoSlotIndex);
-      usedThisExchange[playerB.id]!.push(actionB.madoSlotIndex);
+      const hit = resolveMadoHit(mado.frequency, defender.shieldFrequency, fleeMultiplier);
+      damageByPlayerId[defender.id] = hit.damage;
+      echoByAttackerId[attacker.id] = hit.echo;
+      usedSlotsByPlayerId[attacker.id]!.add(action.madoSlotIndex);
+      usedThisExchange[attacker.id]!.push(action.madoSlotIndex);
     }
 
     healthByPlayerId[playerA.id] -= damageByPlayerId[playerA.id]!;
@@ -423,10 +462,7 @@ export function resolveScriptedBattle(
         [playerB.id]: actionB,
       },
       damageByPlayerId,
-      insightGainByAttackerId: {
-        [playerA.id]: damageByPlayerId[playerB.id]!,
-        [playerB.id]: damageByPlayerId[playerA.id]!,
-      },
+      echoByAttackerId,
       fleeingPlayerIdsAfterExchange: [...fleeingPlayerIds],
       usedMadoSlotIndexesByPlayerId: usedThisExchange,
     });

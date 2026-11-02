@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { Player } from "./gameTypes.js";
 import {
-  addInsightFromDamage,
-  applySharedInsight,
+  applyEcho,
   calculateDamage,
   circularDistance,
   createInitialInsight,
   discardMados,
   fillEmptyMadoSlots,
-  getInsightSegment,
+  getEchoBand,
+  mergeSharedInsight,
   removeDeadPlayerInsights,
   resolveAttackDeclarations,
   resolveScriptedBattle,
+  toFrequencyArcs,
+  tuneMado,
+  tuneMadoFrequency,
 } from "./rules.js";
 
 function makePlayer(overrides: Partial<Player> & Pick<Player, "id">): Player {
@@ -34,67 +37,104 @@ describe("frequency and damage rules", () => {
     expect(circularDistance(10, 350)).toBe(20);
   });
 
-  it("calculates full match damage", () => {
-    expect(calculateDamage(90, 90)).toBe(25);
+  it("does full damage inside the full damage distance", () => {
+    expect(calculateDamage(90, 90)).toBe(30);
+    expect(calculateDamage(90, 105)).toBe(30);
   });
 
-  it("calculates 90 degree damage", () => {
-    expect(calculateDamage(0, 90)).toBe(12.5);
+  it("falls off linearly between the full and zero damage distances", () => {
+    expect(calculateDamage(0, 30)).toBe(15);
   });
 
-  it("calculates opposite frequency as no damage", () => {
+  it("does no damage from the zero damage distance and beyond", () => {
+    expect(calculateDamage(0, 45)).toBe(0);
     expect(calculateDamage(0, 180)).toBe(0);
   });
 
   it("applies flee multiplier to actual damage", () => {
-    expect(calculateDamage(0, 0, 0.5)).toBe(12.5);
+    expect(calculateDamage(0, 0, 0.5)).toBe(15);
   });
 });
 
-describe("insight rules", () => {
-  it("crosses thresholds and updates level", () => {
-    const insight = addInsightFromDamage(undefined, 181, 25, () => 0);
+describe("echo and insight rules", () => {
+  it("maps distance to echo bands", () => {
+    expect(getEchoBand(0)).toBe("glowing");
+    expect(getEchoBand(15)).toBe("glowing");
+    expect(getEchoBand(16)).toBe("warm");
+    expect(getEchoBand(45)).toBe("warm");
+    expect(getEchoBand(90)).toBe("lukewarm");
+    expect(getEchoBand(91)).toBe("cold");
+  });
 
-    expect(insight.points).toBe(18.75);
-    expect(insight.level).toBe(1);
-    expect(insight.segment).toEqual({
-      level: 1,
-      index: 1,
-      start: 180,
-      end: 360,
+  it("starts with every frequency possible", () => {
+    expect(createInitialInsight().candidates).toHaveLength(360);
+  });
+
+  it("keeps only frequencies consistent with an echo", () => {
+    const insight = applyEcho(undefined, 100, "glowing");
+
+    expect(insight.candidates).toHaveLength(31);
+    expect(insight.candidates[0]).toBe(85);
+    expect(insight.candidates.at(-1)).toBe(115);
+  });
+
+  it("narrows to the overlap of several echoes and keeps the true shield", () => {
+    const shield = 200;
+    let insight = createInitialInsight();
+
+    for (const madoFrequency of [0, 120, 230]) {
+      insight = applyEcho(insight, madoFrequency, getEchoBand(circularDistance(madoFrequency, shield)));
+    }
+
+    expect(insight.candidates).toContain(shield);
+    expect(insight.candidates.length).toBeLessThan(60);
+  });
+
+  it("merges shared insight as an intersection", () => {
+    const receiver = applyEcho(undefined, 0, "lukewarm");
+    const shared = applyEcho(undefined, 90, "glowing");
+    const merged = mergeSharedInsight(receiver, shared);
+
+    expect(merged.candidates.every((frequency) => receiver.candidates.includes(frequency))).toBe(true);
+    expect(merged.candidates.every((frequency) => shared.candidates.includes(frequency))).toBe(true);
+    expect(merged.candidates).toContain(90);
+  });
+
+  it("turns candidates into arcs and joins arcs across zero degrees", () => {
+    expect(toFrequencyArcs(createInitialInsight().candidates)).toEqual([{ start: 0, end: 360 }]);
+    expect(toFrequencyArcs(applyEcho(undefined, 0, "glowing").candidates)).toEqual([
+      { start: 345, end: 376 },
+    ]);
+    expect(toFrequencyArcs(applyEcho(undefined, 90, "warm").candidates)).toEqual([
+      { start: 45, end: 75 },
+      { start: 106, end: 136 },
+    ]);
+  });
+});
+
+describe("tuning rules", () => {
+  it("moves a Mado toward the target by the shortest way round", () => {
+    expect(tuneMadoFrequency(350, 20)).toBe(20);
+    expect(tuneMadoFrequency(20, 350)).toBe(350);
+  });
+
+  it("limits tuning to the tune range", () => {
+    expect(tuneMadoFrequency(0, 100)).toBe(60);
+    expect(tuneMadoFrequency(0, 260)).toBe(300);
+  });
+
+  it("tunes only the chosen slot", () => {
+    const player = makePlayer({
+      id: "player",
+      madoSlots: [
+        { id: "mado-0", frequency: 0, baseDamage: 30 },
+        { id: "mado-1", frequency: 90, baseDamage: 30 },
+      ],
     });
-  });
+    const tuned = tuneMado(player, 1, 120);
 
-  it("finds the deterministic segment containing shield frequency", () => {
-    expect(getInsightSegment(181, 3)).toEqual({
-      level: 3,
-      index: 4,
-      start: 180,
-      end: 225,
-    });
-  });
-
-  it("upgrades receiver when shared insight has higher level", () => {
-    const received = applySharedInsight(undefined, 181, 3);
-
-    expect(received.level).toBe(3);
-    expect(received.points).toBe(45);
-    expect(received.segment).toEqual(getInsightSegment(181, 3));
-  });
-
-  it("does not downgrade receiver when they already have higher insight", () => {
-    const current = addInsightFromDamage(undefined, 181, 100, () => 1);
-    const received = applySharedInsight(current, 181, 2);
-
-    expect(received).toBe(current);
-    expect(received.level).toBe(5);
-  });
-
-  it("sets receiver points to at least the minimum threshold for shared level", () => {
-    const current = createInitialInsight(181);
-    const received = applySharedInsight(current, 181, 4);
-
-    expect(received.points).toBe(70);
+    expect(tuned.madoSlots[0]?.frequency).toBe(0);
+    expect(tuned.madoSlots[1]?.frequency).toBe(120);
   });
 });
 
@@ -103,8 +143,8 @@ describe("mado and cleanup rules", () => {
     const player = makePlayer({
       id: "player",
       madoSlots: [
-        { id: "mado-0", frequency: 0, baseDamage: 25 },
-        { id: "mado-1", frequency: 90, baseDamage: 25 },
+        { id: "mado-0", frequency: 0, baseDamage: 30 },
+        { id: "mado-1", frequency: 90, baseDamage: 30 },
       ],
     });
 
@@ -117,14 +157,14 @@ describe("mado and cleanup rules", () => {
 
   it("fills empty mado slots and keeps existing slots", () => {
     const slots = fillEmptyMadoSlots(
-      [{ id: "existing", frequency: 12, baseDamage: 25 }],
+      [{ id: "existing", frequency: 12, baseDamage: 30 }],
       (slotIndex) => `mado-${slotIndex}`,
       () => 0.5,
     );
 
     expect(slots).toHaveLength(5);
     expect(slots[0]?.id).toBe("existing");
-    expect(slots[1]).toEqual({ id: "mado-1", frequency: 180, baseDamage: 25 });
+    expect(slots[1]).toEqual({ id: "mado-1", frequency: 180, baseDamage: 30 });
   });
 
   it("removes frequency insight about dead players", () => {
@@ -138,14 +178,14 @@ describe("mado and cleanup rules", () => {
         madoSlots: [],
         discardedThisRound: new Set(),
         insightsByTarget: {
-          dead: createInitialInsight(181),
+          dead: createInitialInsight(),
         },
         receivedInsights: [
           {
             fromPlayerId: "other",
             targetPlayerId: "dead",
-            level: 1,
-            segment: getInsightSegment(181, 1),
+            arcs: [{ start: 180, end: 360 }],
+            possibleCount: 180,
             roundNumber: 1,
           },
         ],
@@ -232,7 +272,7 @@ describe("battle resolution rules", () => {
       madoSlots: [0, 1, 2, 3, 4].map((index) => ({
         id: `mado-${index}`,
         frequency: 0,
-        baseDamage: 25,
+        baseDamage: 30,
       })),
     });
     const fleeing = makePlayer({
@@ -249,11 +289,11 @@ describe("battle resolution rules", () => {
     );
 
     expect(result.exchanges.map((exchange) => exchange.damageByPlayerId.fleeing)).toEqual([
-      12.5,
-      10,
-      7.5,
-      5,
-      2.5,
+      15,
+      12,
+      9,
+      6,
+      3,
     ]);
   });
 
@@ -263,13 +303,13 @@ describe("battle resolution rules", () => {
         id: "a",
         health: 10,
         shieldFrequency: 0,
-        madoSlots: [{ id: "a-mado", frequency: 0, baseDamage: 25 }],
+        madoSlots: [{ id: "a-mado", frequency: 0, baseDamage: 30 }],
       }),
       makePlayer({
         id: "b",
         health: 10,
         shieldFrequency: 0,
-        madoSlots: [{ id: "b-mado", frequency: 0, baseDamage: 25 }],
+        madoSlots: [{ id: "b-mado", frequency: 0, baseDamage: 30 }],
       }),
       [
         {

@@ -18,13 +18,15 @@ Each wizard has:
 - Partial insight into other players' shield frequencies
 
 Damage depends on how closely a Mado frequency matches the target's shield
-frequency. Dealing damage gives the attacker more insight into the target's
-shield, but only as narrowing segments on a circle, not exact numbers.
+frequency: full damage within 15°, falling to nothing at 45°. Every shot sends
+back an echo (glowing, warm, lukewarm or cold) that rules out part of the
+circle, so a battle is also a hunt for the enemy shield. Between battles each
+wizard can tune one Mado up to 60° toward a shield they have tracked.
 
 Each round has these phases:
 
 1. Empty Mado slots are filled.
-2. Players may discard unwanted Mados.
+2. Players may discard unwanted Mados and tune one Mado.
 3. Living players choose whether to attack another player.
 4. Matched battles resolve through simultaneous exchanges.
 5. The round is cleaned up, deaths are applied, and the host starts the next

@@ -8,10 +8,13 @@ import type {
   ExchangeAction,
   GameActionResult,
   GameSnapshot,
+  InsightState,
   InterServerEvents,
   LobbyActionResult,
   LobbyPlayer,
+  LastExchangeSnapshot,
   LobbySnapshot,
+  MadoTuning,
   MatchmakingBattle,
   Player,
   PublicBattleHistoryEntry,
@@ -22,15 +25,19 @@ import type {
 } from "../shared/index.js";
 import {
   STARTING_HEALTH,
-  addInsightFromDamage,
-  applySharedInsight,
-  calculateDamage,
+  applyEcho,
   createInitialInsight,
   discardMados,
   fillEmptyMadoSlots,
+  fleeMultiplierForRound,
+  isInsightNarrowed,
+  mergeSharedInsight,
   randomFrequency,
   removeDeadPlayerInsights,
   resolveAttackDeclarations,
+  resolveMadoHit,
+  toFrequencyArcs,
+  tuneMado,
 } from "../shared/index.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -186,11 +193,35 @@ function createCurrentBattleSnapshot(
     ],
     totalDamageTaken,
     lastExchange: lastExchange
-      ? {
-          index: lastExchange.index,
-          damageTaken: lastExchange.damageByPlayerId[currentPlayerId] ?? 0,
-        }
+      ? createLastExchangeSnapshot(game, lastExchange, currentPlayerId)
       : null,
+  };
+}
+
+function createLastExchangeSnapshot(
+  game: LobbyGame,
+  exchange: Exchange,
+  currentPlayerId: string,
+): LastExchangeSnapshot {
+  const action = exchange.actionsByPlayerId[currentPlayerId];
+  const player = game.gamePlayersById.get(currentPlayerId);
+  const firedMado =
+    action?.type === "mado" ? player?.madoSlots[action.madoSlotIndex] ?? null : null;
+
+  return {
+    index: exchange.index,
+    damageTaken: exchange.damageByPlayerId[currentPlayerId] ?? 0,
+    echo: exchange.echoByAttackerId[currentPlayerId] ?? null,
+    firedFrequency: firedMado?.frequency ?? null,
+  };
+}
+
+function createKnownShieldSnapshot(insight: InsightState | undefined) {
+  const candidates = insight?.candidates ?? createInitialInsight().candidates;
+
+  return {
+    arcs: toFrequencyArcs(candidates),
+    possibleCount: candidates.length,
   };
 }
 
@@ -225,20 +256,14 @@ function createGameSnapshot(game: LobbyGame, currentPlayerId: string): GameSnaps
         alive: game.gamePlayersById.get(player.id)?.alive ?? true,
         host: player.host,
         connected: player.connected,
-        insight: {
-          level: currentPlayer.insightsByTarget[player.id]?.level ?? 0,
-          segment:
-            currentPlayer.insightsByTarget[player.id]?.segment ??
-            createInitialInsight(0).segment,
-        },
+        insight: createKnownShieldSnapshot(currentPlayer.insightsByTarget[player.id]),
       })),
     shareableInsights: Object.entries(currentPlayer.insightsByTarget)
-      .filter(([, insight]) => insight.level > 0)
+      .filter(([, insight]) => isInsightNarrowed(insight))
       .map(([targetPlayerId, insight]) => ({
+        ...createKnownShieldSnapshot(insight),
         targetPlayerId,
         targetName: game.playersById.get(targetPlayerId)?.name ?? "Unknown",
-        level: insight.level,
-        segment: insight.segment,
       })),
     receivedInsights: currentPlayer.receivedInsights,
     discardSubmittedPlayerIds: [...game.discardSubmittedPlayerIds],
@@ -425,7 +450,7 @@ function startGame(socket: GameSocket): GameActionResult {
     player.insightsByTarget = Object.fromEntries(
       [...game.gamePlayersById.values()]
         .filter((target) => target.id !== player.id)
-        .map((target) => [target.id, createInitialInsight(target.shieldFrequency)]),
+        .map((target) => [target.id, createInitialInsight()]),
     );
   }
 
@@ -586,9 +611,9 @@ function resolveReadyBattleExchange(game: LobbyGame, battle: ActiveBattle) {
     [playerA.id]: 0,
     [playerB.id]: 0,
   };
-  const insightGainByAttackerId: Record<string, number> = {
-    [playerA.id]: 0,
-    [playerB.id]: 0,
+  const echoByAttackerId: Exchange["echoByAttackerId"] = {
+    [playerA.id]: null,
+    [playerB.id]: null,
   };
   const usedThisExchange: Record<string, number[]> = {
     [playerA.id]: [],
@@ -606,29 +631,22 @@ function resolveReadyBattleExchange(game: LobbyGame, battle: ActiveBattle) {
     const mado = attacker.madoSlots[action.madoSlotIndex]!;
     const defenderFleeing = battle.fleeingPlayerIds.has(defender.id);
     const fleeRoundIndex = Math.max(0, countFleeRoundsForPlayer(battle, defender.id));
-    const fleeMultiplier = defenderFleeing
-      ? [0.5, 0.4, 0.3, 0.2, 0.1][Math.min(fleeRoundIndex, 4)]!
-      : 1;
-    const damage = calculateDamage(mado.frequency, defender.shieldFrequency, fleeMultiplier);
+    const fleeMultiplier = defenderFleeing ? fleeMultiplierForRound(fleeRoundIndex) : 1;
+    const hit = resolveMadoHit(mado.frequency, defender.shieldFrequency, fleeMultiplier);
 
-    damageByPlayerId[defender.id] = damage;
-    insightGainByAttackerId[attacker.id] = damage;
+    damageByPlayerId[defender.id] = hit.damage;
+    echoByAttackerId[attacker.id] = hit.echo;
+    attacker.insightsByTarget[defender.id] = applyEcho(
+      attacker.insightsByTarget[defender.id],
+      mado.frequency,
+      hit.echo,
+    );
     battle.usedMadoSlotIndexesByPlayerId[attacker.id]!.add(action.madoSlotIndex);
     usedThisExchange[attacker.id]!.push(action.madoSlotIndex);
   }
 
   battle.healthByPlayerId[playerA.id] -= damageByPlayerId[playerA.id]!;
   battle.healthByPlayerId[playerB.id] -= damageByPlayerId[playerB.id]!;
-  playerA.insightsByTarget[playerB.id] = addInsightFromDamage(
-    playerA.insightsByTarget[playerB.id],
-    playerB.shieldFrequency,
-    insightGainByAttackerId[playerA.id]!,
-  );
-  playerB.insightsByTarget[playerA.id] = addInsightFromDamage(
-    playerB.insightsByTarget[playerA.id],
-    playerA.shieldFrequency,
-    insightGainByAttackerId[playerB.id]!,
-  );
 
   battle.exchanges.push({
     index: battle.exchanges.length,
@@ -637,7 +655,7 @@ function resolveReadyBattleExchange(game: LobbyGame, battle: ActiveBattle) {
       [playerB.id]: actionB,
     },
     damageByPlayerId,
-    insightGainByAttackerId,
+    echoByAttackerId,
     fleeingPlayerIdsAfterExchange: [...battle.fleeingPlayerIds],
     usedMadoSlotIndexesByPlayerId: usedThisExchange,
   });
@@ -815,30 +833,23 @@ function shareInsight(
 
   const senderInsight = sender.insightsByTarget[target.id];
 
-  if (!senderInsight || senderInsight.level <= 0) {
+  if (!senderInsight || !isInsightNarrowed(senderInsight)) {
     return { ok: false, error: "You do not have insight to share about that target." };
   }
 
-  const currentReceiverInsight = receiver.insightsByTarget[target.id];
-  receiver.insightsByTarget[target.id] = applySharedInsight(
-    currentReceiverInsight,
-    target.shieldFrequency,
-    senderInsight.level,
+  receiver.insightsByTarget[target.id] = mergeSharedInsight(
+    receiver.insightsByTarget[target.id],
+    senderInsight,
   );
-  receiver.receivedInsights.push({
+
+  const transfer = {
     fromPlayerId: sender.id,
     targetPlayerId: target.id,
-    level: senderInsight.level,
-    segment: senderInsight.segment,
+    ...createKnownShieldSnapshot(senderInsight),
     roundNumber: game.roundNumber,
-  });
-  sender.receivedInsights.push({
-    fromPlayerId: sender.id,
-    targetPlayerId: target.id,
-    level: senderInsight.level,
-    segment: senderInsight.segment,
-    roundNumber: game.roundNumber,
-  });
+  };
+  receiver.receivedInsights.push(transfer);
+  sender.receivedInsights.push(transfer);
 
   emitGameUpdate(game);
   return { ok: true, game: createGameSnapshot(game, sender.id) };
@@ -846,7 +857,7 @@ function shareInsight(
 
 function submitDiscards(
   socket: GameSocket,
-  payload: { slotIndexes: number[] },
+  payload: { slotIndexes: number[]; tuning?: MadoTuning | null },
 ): GameActionResult {
   const game = getSocketGame(socket);
   const playerId = socket.data.playerId;
@@ -859,6 +870,10 @@ function submitDiscards(
     return { ok: false, error: "Discarding is not available in this phase." };
   }
 
+  if (game.discardSubmittedPlayerIds.has(playerId)) {
+    return { ok: false, error: "You have already prepared your Mados this round." };
+  }
+
   const player = game.gamePlayersById.get(playerId);
 
   if (!player || !player.alive) {
@@ -868,7 +883,22 @@ function submitDiscards(
   const slotIndexes = [...new Set(payload.slotIndexes)]
     .filter((slotIndex) => Number.isInteger(slotIndex))
     .filter((slotIndex) => slotIndex >= 0 && slotIndex < player.madoSlots.length);
-  game.gamePlayersById.set(playerId, discardMados(player, slotIndexes));
+  const tuning = payload.tuning ?? null;
+
+  if (tuning) {
+    const validTuning =
+      Number.isInteger(tuning.slotIndex) &&
+      Number.isFinite(tuning.frequency) &&
+      player.madoSlots[tuning.slotIndex] != null &&
+      !slotIndexes.includes(tuning.slotIndex);
+
+    if (!validTuning) {
+      return { ok: false, error: "Choose a Mado you keep to tune." };
+    }
+  }
+
+  const tunedPlayer = tuning ? tuneMado(player, tuning.slotIndex, tuning.frequency) : player;
+  game.gamePlayersById.set(playerId, discardMados(tunedPlayer, slotIndexes));
   game.discardSubmittedPlayerIds.add(playerId);
 
   if (livingPlayerIds(game).every((id) => game.discardSubmittedPlayerIds.has(id))) {

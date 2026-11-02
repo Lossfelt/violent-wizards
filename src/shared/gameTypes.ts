@@ -9,27 +9,28 @@ export type GameStatus =
 export type Mado = {
   id: string;
   frequency: number;
-  baseDamage: 25;
+  baseDamage: number;
 };
 
-export type FrequencySegment = {
-  level: number;
-  index: number;
+// A continuous range of possible frequencies. `end` is exclusive and may exceed 360
+// when the arc wraps past 0 degrees.
+export type FrequencyArc = {
   start: number;
   end: number;
 };
 
+export type EchoBand = "glowing" | "warm" | "lukewarm" | "cold";
+
+// Every shield frequency that is still consistent with what the holder has learned.
 export type InsightState = {
-  points: number;
-  level: number;
-  segment: FrequencySegment;
+  candidates: number[];
 };
 
 export type InsightTransfer = {
   fromPlayerId: string;
   targetPlayerId: string;
-  level: number;
-  segment: FrequencySegment;
+  arcs: FrequencyArc[];
+  possibleCount: number;
   roundNumber: number;
 };
 
@@ -65,7 +66,7 @@ export type Exchange = {
   index: number;
   actionsByPlayerId: Record<string, ExchangeAction>;
   damageByPlayerId: Record<string, number>;
-  insightGainByAttackerId: Record<string, number>;
+  echoByAttackerId: Record<string, EchoBand | null>;
   fleeingPlayerIdsAfterExchange: string[];
   usedMadoSlotIndexesByPlayerId: Record<string, number[]>;
 };

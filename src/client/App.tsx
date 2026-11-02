@@ -18,17 +18,25 @@ import {
 import { io, type Socket } from "socket.io-client";
 import type {
   ClientToServerEvents,
+  EchoBand,
   ExchangeAction,
-  FrequencySegment,
+  FrequencyArc,
   GameSnapshot,
   LobbySnapshot,
   Mado,
   ServerToClientEvents,
 } from "../shared";
-import { MAX_MADOS, STARTING_HEALTH } from "../shared";
+import {
+  FREQUENCY_COUNT,
+  MADO_TUNE_RANGE,
+  MAX_MADOS,
+  STARTING_HEALTH,
+  normalizeFrequency,
+} from "../shared";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 type DrawerId = "opponents" | "share" | "history";
+type PrepareMode = "discard" | "tune";
 
 const SESSION_STORAGE_KEY = "violent-wizards-session-id";
 const SERVER_URL = import.meta.env.VITE_SERVER_URL;
@@ -63,14 +71,28 @@ function polarPoint(degrees: number, radius = WHEEL_RADIUS) {
   };
 }
 
-function segmentPath(segment: FrequencySegment) {
-  if (segment.level === 0) {
-    return undefined;
-  }
+const ECHO_LABELS: Record<EchoBand, string> = {
+  glowing: "Glowing",
+  warm: "Warm",
+  lukewarm: "Lukewarm",
+  cold: "Cold",
+};
 
-  const start = polarPoint(segment.start);
-  const end = polarPoint(segment.end);
-  const largeArcFlag = segment.end - segment.start > 180 ? 1 : 0;
+const ECHO_DESCRIPTIONS: Record<EchoBand, string> = {
+  glowing: "Direct hit. Full damage went through.",
+  warm: "Close. Some damage went through.",
+  lukewarm: "Off target. The shield held.",
+  cold: "Far off. The shield is on the other side.",
+};
+
+function isFullCircle(arcs: FrequencyArc[]) {
+  return arcs.length === 1 && arcs[0]!.end - arcs[0]!.start >= 360;
+}
+
+function arcPath(arc: FrequencyArc) {
+  const start = polarPoint(arc.start);
+  const end = polarPoint(arc.end);
+  const largeArcFlag = arc.end - arc.start > 180 ? 1 : 0;
 
   return [
     `M ${WHEEL_CENTER} ${WHEEL_CENTER}`,
@@ -89,29 +111,40 @@ function frequencyMarkerStyle(frequency: number) {
 }
 
 function FrequencyWheel({
+  arcs,
+  ghostMarker,
   marker,
-  segment,
   label,
+  size,
 }: {
+  arcs?: FrequencyArc[];
+  ghostMarker?: number;
   marker?: number;
-  segment?: FrequencySegment;
   label: string;
+  size?: "large";
 }) {
   const markerPoint = marker === undefined ? null : polarPoint(marker, WHEEL_RADIUS + 1);
-  const path = segment ? segmentPath(segment) : undefined;
+  const ghostPoint =
+    ghostMarker === undefined ? null : polarPoint(ghostMarker, WHEEL_RADIUS + 1);
+  const fullCircle = arcs ? isFullCircle(arcs) : false;
 
   return (
     <svg
       aria-label={label}
       className="frequency-wheel"
+      data-size={size}
       role="img"
       viewBox={`0 0 ${WHEEL_SIZE} ${WHEEL_SIZE}`}
     >
       <circle className="wheel-ring" cx={WHEEL_CENTER} cy={WHEEL_CENTER} r={WHEEL_RADIUS} />
-      {segment?.level === 0 ? (
+      {fullCircle ? (
         <circle className="wheel-segment" cx={WHEEL_CENTER} cy={WHEEL_CENTER} r={WHEEL_RADIUS} />
+      ) : (
+        arcs?.map((arc) => <path className="wheel-segment" d={arcPath(arc)} key={arc.start} />)
+      )}
+      {ghostPoint ? (
+        <circle className="wheel-marker ghost" cx={ghostPoint.x} cy={ghostPoint.y} r="3" />
       ) : null}
-      {path ? <path className="wheel-segment" d={path} /> : null}
       {markerPoint ? (
         <circle className="wheel-marker" cx={markerPoint.x} cy={markerPoint.y} r="4" />
       ) : null}
@@ -231,13 +264,17 @@ function RulesModal({ onClose }: { onClose: () => void }) {
             <p>
               Every wizard hides behind an invisible shield tuned to a secret frequency.
               Your Mados are living magical torpedoes, each with their own frequency.
-              The closer a Mado is to an enemy shield frequency, the more damage gets through.
+              A Mado within 15° of the shield does full damage. Damage falls off until 45°, and
+              beyond that the shield holds completely.
             </p>
           </section>
           <section className="rules-section">
             <h3>Round flow</h3>
             <ol>
-              <li>Prepare: keep or discard Mados. Empty slots refill next round.</li>
+              <li>
+                Prepare: discard Mados (empty slots refill next round) and tune one Mado up to{" "}
+                {MADO_TUNE_RANGE}° in either direction.
+              </li>
               <li>Declare: attack one living opponent, or pass.</li>
               <li>Battle: matched opponents resolve simultaneous exchanges.</li>
               <li>Cleanup: spent Mados are removed, dead players fall, and the host starts the next round.</li>
@@ -253,11 +290,17 @@ function RulesModal({ onClose }: { onClose: () => void }) {
             </ol>
           </section>
           <section className="rules-section">
-            <h3>Insight and victory</h3>
+            <h3>Echoes, insight and victory</h3>
             <p>
-              Dealing damage gives insight into that opponent's shield frequency. Higher insight narrows
-              the known range and can be shared with other living players outside active battles. The last
-              living wizard wins. If nobody survives, the game is a draw.
+              Every Mado you fire sends back an echo: glowing (within 15°), warm (within 45°),
+              lukewarm (within 90°) or cold. Each echo rules out part of the circle, and the remaining
+              possible range is shown on the opponent's wheel. Misses teach you as much as hits, so
+              spread your first shots to find the shield, then fire and tune toward it.
+            </p>
+            <p>
+              Known ranges can be shared with other living players outside active battles. The receiver
+              keeps only the part of the circle both of you agree on. The last living wizard wins. If
+              nobody survives, the game is a draw.
             </p>
           </section>
         </div>
@@ -556,20 +599,27 @@ function PlayerStatusPanel({ game }: { game: GameSnapshot }) {
 function MadoSlotGrid({
   disabled,
   disabledSlotIndexes = [],
+  frequencyOverrides = {},
   onSlotClick,
+  overlayArcs,
   selectedSlotIndexes = [],
+  selectionTone,
   slots,
 }: {
   disabled?: boolean;
   disabledSlotIndexes?: number[];
+  frequencyOverrides?: Record<number, number>;
   onSlotClick?: (slotIndex: number, mado: Mado) => void;
+  overlayArcs?: FrequencyArc[];
   selectedSlotIndexes?: number[];
+  selectionTone?: "tune";
   slots: Array<Mado | null>;
 }) {
   return (
-    <div className="mado-grid">
+    <div className="mado-grid" data-tone={selectionTone}>
       {slots.map((mado, index) => {
         const isDisabled = disabled || mado === null || disabledSlotIndexes.includes(index);
+        const frequency = frequencyOverrides[index] ?? mado?.frequency;
 
         return (
           <button
@@ -585,10 +635,15 @@ function MadoSlotGrid({
             type="button"
           >
             <strong>{index + 1}</strong>
-            {mado ? (
+            {mado && frequency !== undefined ? (
               <>
-                <FrequencyWheel label={`Mado slot ${index + 1}`} marker={mado.frequency} />
-                <span className="mado-frequency-label">{Math.round(mado.frequency)} deg</span>
+                <FrequencyWheel
+                  arcs={overlayArcs}
+                  ghostMarker={frequency !== mado.frequency ? mado.frequency : undefined}
+                  label={`Mado slot ${index + 1}`}
+                  marker={frequency}
+                />
+                <span className="mado-frequency-label">{Math.round(frequency)} deg</span>
               </>
             ) : (
               <span>Empty</span>
@@ -597,6 +652,172 @@ function MadoSlotGrid({
         );
       })}
     </div>
+  );
+}
+
+type Preparation = {
+  mode: PrepareMode;
+  setMode: (mode: PrepareMode) => void;
+  selectedDiscardSlots: number[];
+  toggleDiscardSlot: (slotIndex: number) => void;
+  tuningSlot: number | null;
+  setTuningSlot: (slotIndex: number | null) => void;
+  tuningOffset: number;
+  setTuningOffset: (offset: number) => void;
+  aimOpponentId: string;
+  setAimOpponentId: (opponentId: string) => void;
+  submit: () => void;
+};
+
+function EchoCard({ echo }: { echo: EchoBand }) {
+  return (
+    <div className="battle-result-card echo-card" data-echo={echo}>
+      <span>Your Mado's echo</span>
+      <strong>{ECHO_LABELS[echo]}</strong>
+      <small>{ECHO_DESCRIPTIONS[echo]}</small>
+    </div>
+  );
+}
+
+function knownArcs(game: GameSnapshot, opponentId: string | undefined) {
+  const opponent = game.opponents.find((candidate) => candidate.id === opponentId);
+
+  return opponent && opponent.insight.possibleCount < FREQUENCY_COUNT
+    ? opponent.insight.arcs
+    : undefined;
+}
+
+function PreparePanel({
+  className,
+  game,
+  hasSubmitted,
+  preparation,
+}: {
+  className: string;
+  game: GameSnapshot;
+  hasSubmitted: boolean;
+  preparation: Preparation;
+}) {
+  const {
+    aimOpponentId,
+    mode,
+    selectedDiscardSlots,
+    tuningOffset,
+    tuningSlot,
+  } = preparation;
+  const slots = game.currentPlayer.madoSlots;
+  const tunedMado = tuningSlot === null ? null : slots[tuningSlot] ?? null;
+  const tunedFrequency = tunedMado
+    ? normalizeFrequency(tunedMado.frequency + tuningOffset)
+    : null;
+  const aimArcs = knownArcs(game, aimOpponentId);
+  const aimTargets = game.opponents.filter(
+    (opponent) => opponent.alive && opponent.insight.possibleCount < FREQUENCY_COUNT,
+  );
+
+  function handleSlotClick(slotIndex: number) {
+    if (mode === "discard") {
+      if (slotIndex === tuningSlot) {
+        preparation.setTuningSlot(null);
+      }
+
+      preparation.toggleDiscardSlot(slotIndex);
+      return;
+    }
+
+    preparation.setTuningSlot(slotIndex);
+    preparation.setTuningOffset(0);
+  }
+
+  return (
+    <section className={className}>
+      <div className="phase-heading">
+        <h2>Prepare Mados</h2>
+        <p>
+          Discard Mados to get new ones next round, and tune one Mado up to {MADO_TUNE_RANGE}°
+          toward a shield you have tracked.
+        </p>
+      </div>
+      <div className="prepare-toolbar">
+        <div className="mode-switch" role="group" aria-label="Preparation mode">
+          {(["discard", "tune"] as const).map((option) => (
+            <button
+              aria-pressed={mode === option}
+              disabled={hasSubmitted}
+              key={option}
+              onClick={() => preparation.setMode(option)}
+              type="button"
+            >
+              {option === "discard" ? "Discard" : "Tune"}
+            </button>
+          ))}
+        </div>
+        <label className="aim-select">
+          Show known shield
+          <select
+            disabled={aimTargets.length === 0}
+            value={aimOpponentId}
+            onChange={(event) => preparation.setAimOpponentId(event.target.value)}
+          >
+            <option value="">{aimTargets.length === 0 ? "Nothing tracked yet" : "None"}</option>
+            {aimTargets.map((opponent) => (
+              <option key={opponent.id} value={opponent.id}>
+                {opponent.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <MadoSlotGrid
+        disabled={hasSubmitted}
+        disabledSlotIndexes={mode === "tune" ? selectedDiscardSlots : []}
+        frequencyOverrides={
+          tuningSlot !== null && tunedFrequency !== null ? { [tuningSlot]: tunedFrequency } : {}
+        }
+        onSlotClick={handleSlotClick}
+        overlayArcs={aimArcs}
+        selectedSlotIndexes={
+          mode === "discard" ? selectedDiscardSlots : tuningSlot === null ? [] : [tuningSlot]
+        }
+        selectionTone={mode === "tune" ? "tune" : undefined}
+        slots={slots}
+      />
+      {mode === "tune" && tunedMado && tunedFrequency !== null && !hasSubmitted ? (
+        <div className="tune-panel">
+          <FrequencyWheel
+            arcs={aimArcs}
+            ghostMarker={tunedMado.frequency}
+            label={`Mado ${tuningSlot! + 1} tuned to ${tunedFrequency} degrees`}
+            marker={tunedFrequency}
+            size="large"
+          />
+          <label className="tune-slider">
+            <span>
+              Mado {tuningSlot! + 1}: {Math.round(tunedMado.frequency)}° → {tunedFrequency}°
+            </span>
+            <input
+              max={MADO_TUNE_RANGE}
+              min={-MADO_TUNE_RANGE}
+              onChange={(event) => preparation.setTuningOffset(Number(event.target.value))}
+              step={1}
+              type="range"
+              value={tuningOffset}
+            />
+          </label>
+        </div>
+      ) : mode === "tune" && !hasSubmitted ? (
+        <p className="waiting-copy">Pick the Mado you want to tune.</p>
+      ) : null}
+      <button
+        className="primary-button action-button"
+        disabled={hasSubmitted}
+        onClick={preparation.submit}
+        type="button"
+      >
+        <span>{hasSubmitted ? "Waiting for others" : "Confirm preparation"}</span>
+        <ChevronRight size={22} aria-hidden="true" />
+      </button>
+    </section>
   );
 }
 
@@ -610,13 +831,11 @@ function PrimaryPhasePanel({
   lastDamageTaken,
   totalBattleDamageTaken,
   mustChooseBattleAction,
-  selectedDiscardSlots,
+  preparation,
   showBattleResult,
   startNextRound,
   submitAttack,
   submitBattleAction,
-  submitDiscards,
-  toggleDiscardSlot,
   winnerName,
 }: {
   currentBattle: GameSnapshot["currentBattle"];
@@ -628,43 +847,27 @@ function PrimaryPhasePanel({
   lastDamageTaken: number;
   totalBattleDamageTaken: number;
   mustChooseBattleAction: boolean;
-  selectedDiscardSlots: number[];
+  preparation: Preparation;
   showBattleResult: boolean;
   startNextRound: () => void;
   submitAttack: (targetPlayerId: string | null) => void;
   submitBattleAction: (action: ExchangeAction) => void;
-  submitDiscards: () => void;
-  toggleDiscardSlot: (slotIndex: number) => void;
   winnerName: string | undefined;
 }) {
   const primaryPhaseClassName = "phase-panel primary-phase phase-transition";
   const exchangeImpactKey = currentBattle?.lastExchange
     ? `${currentBattle.id}-${currentBattle.lastExchange.index}`
     : null;
+  const lastEcho = currentBattle?.lastExchange?.echo ?? null;
 
   if (game.status === "round_prepare") {
     return (
-      <section className={primaryPhaseClassName}>
-        <div className="phase-heading">
-          <h2>Prepare Mados</h2>
-          <p>Select any Mados you want to throw away. Empty slots refill next round.</p>
-        </div>
-        <MadoSlotGrid
-          disabled={hasSubmittedDiscard}
-          onSlotClick={toggleDiscardSlot}
-          selectedSlotIndexes={selectedDiscardSlots}
-          slots={game.currentPlayer.madoSlots}
-        />
-        <button
-          className="primary-button action-button"
-          disabled={hasSubmittedDiscard}
-          onClick={submitDiscards}
-          type="button"
-        >
-          <span>{hasSubmittedDiscard ? "Waiting for others" : "Confirm discard"}</span>
-          <ChevronRight size={22} aria-hidden="true" />
-        </button>
-      </section>
+      <PreparePanel
+        className={primaryPhaseClassName}
+        game={game}
+        hasSubmitted={hasSubmittedDiscard}
+        preparation={preparation}
+      />
     );
   }
 
@@ -716,10 +919,13 @@ function PrimaryPhasePanel({
               </div>
             ) : null}
             {currentBattle.lastExchange ? (
-              <div className="battle-result-card exchange-card" aria-live="polite">
-                <span>Last exchange</span>
-                <strong>{lastDamageTaken} damage taken</strong>
-                <small>{totalBattleDamageTaken} total in this battle</small>
+              <div className="exchange-cards" aria-live="polite">
+                {lastEcho ? <EchoCard echo={lastEcho} /> : null}
+                <div className="battle-result-card exchange-card">
+                  <span>Last exchange</span>
+                  <strong>{lastDamageTaken} damage taken</strong>
+                  <small>{totalBattleDamageTaken} total in this battle</small>
+                </div>
               </div>
             ) : null}
             {isFleeing ? (
@@ -733,6 +939,7 @@ function PrimaryPhasePanel({
                 </p>
                 <MadoSlotGrid
                   disabledSlotIndexes={currentBattle.usedMadoSlotIndexes}
+                  overlayArcs={knownArcs(game, currentBattle.opponentId)}
                   onSlotClick={(index, mado) =>
                     submitBattleAction({
                       type: "mado",
@@ -784,10 +991,13 @@ function PrimaryPhasePanel({
               <h2>Battle result</h2>
               <p>The final exchange has been committed.</p>
             </div>
-            <div className="battle-result-card large">
-              <span>Final exchange</span>
-              <strong>{lastDamageTaken} damage taken</strong>
-              <small>{totalBattleDamageTaken} total in this battle</small>
+            <div className="exchange-cards">
+              {lastEcho ? <EchoCard echo={lastEcho} /> : null}
+              <div className="battle-result-card large">
+                <span>Final exchange</span>
+                <strong>{lastDamageTaken} damage taken</strong>
+                <small>{totalBattleDamageTaken} total in this battle</small>
+              </div>
             </div>
           </>
         ) : (
@@ -820,6 +1030,22 @@ function PrimaryPhasePanel({
   );
 }
 
+function describePossibleRange(possibleCount: number) {
+  return possibleCount >= FREQUENCY_COUNT
+    ? "shield unknown"
+    : `${possibleCount}° of the circle still possible`;
+}
+
+function describeTransfer(game: GameSnapshot, transfer: GameSnapshot["receivedInsights"][number]) {
+  const nameOf = (playerId: string) =>
+    game.opponents.find((opponent) => opponent.id === playerId)?.name ?? "Unknown";
+  const target = nameOf(transfer.targetPlayerId);
+  const source =
+    transfer.fromPlayerId === game.currentPlayer.id ? "You shared" : `${nameOf(transfer.fromPlayerId)} shared`;
+
+  return `${source} ${target} (${transfer.possibleCount}°) in round ${transfer.roundNumber}`;
+}
+
 function OpponentsPanel({ game }: { game: GameSnapshot }) {
   return (
     <section className="phase-panel roster-panel" aria-labelledby="opponents-title">
@@ -839,11 +1065,11 @@ function OpponentsPanel({ game }: { game: GameSnapshot }) {
               </small>
             </div>
             <FrequencyWheel
+              arcs={opponent.insight.arcs}
               label={`Known shield range for ${opponent.name}`}
-              segment={opponent.insight.segment}
             />
             <small className="insight-copy">
-              insight {opponent.insight.level}
+              {describePossibleRange(opponent.insight.possibleCount)}
             </small>
           </div>
         ))}
@@ -907,7 +1133,7 @@ function ShareInsightPanel({
                 <option value="">Choose target</option>
                 {game.shareableInsights.map((insight) => (
                   <option key={insight.targetPlayerId} value={insight.targetPlayerId}>
-                    {insight.targetName} / level {insight.level}
+                    {insight.targetName} / {insight.possibleCount}° possible
                   </option>
                 ))}
               </select>
@@ -925,7 +1151,7 @@ function ShareInsightPanel({
         <div className="battle-list">
           {game.receivedInsights.slice(-3).map((insight, index) => (
             <div className="battle-row" key={`${insight.roundNumber}-${index}`}>
-              Received level {insight.level} insight in round {insight.roundNumber}
+              {describeTransfer(game, insight)}
             </div>
           ))}
         </div>
@@ -1046,6 +1272,10 @@ export function App() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [selectedDiscardSlots, setSelectedDiscardSlots] = useState<number[]>([]);
+  const [prepareMode, setPrepareMode] = useState<PrepareMode>("discard");
+  const [tuningSlot, setTuningSlot] = useState<number | null>(null);
+  const [tuningOffset, setTuningOffset] = useState(0);
+  const [aimOpponentId, setAimOpponentId] = useState("");
   const [shareReceiverId, setShareReceiverId] = useState("");
   const [shareTargetId, setShareTargetId] = useState("");
   const [showBattleResult, setShowBattleResult] = useState(false);
@@ -1168,15 +1398,24 @@ export function App() {
     });
   }
 
-  function submitDiscards() {
+  function submitPreparation() {
+    const tunedMado = tuningSlot === null ? null : game?.currentPlayer.madoSlots[tuningSlot];
+    const tuning =
+      tuningSlot !== null && tunedMado && tuningOffset !== 0
+        ? { slotIndex: tuningSlot, frequency: normalizeFrequency(tunedMado.frequency + tuningOffset) }
+        : null;
+
     setGameError(null);
     socket.emit(
       "round:discard",
-      { slotIndexes: selectedDiscardSlots },
+      { slotIndexes: selectedDiscardSlots, tuning },
       (result) => {
         if (result.ok) {
           setGame(result.game);
           setSelectedDiscardSlots([]);
+          setPrepareMode("discard");
+          setTuningSlot(null);
+          setTuningOffset(0);
           return;
         }
 
@@ -1365,13 +1604,23 @@ export function App() {
                 lastDamageTaken={lastDamageTaken}
                 totalBattleDamageTaken={totalBattleDamageTaken}
                 mustChooseBattleAction={mustChooseBattleAction}
-                selectedDiscardSlots={selectedDiscardSlots}
+                preparation={{
+                  mode: prepareMode,
+                  setMode: setPrepareMode,
+                  selectedDiscardSlots,
+                  toggleDiscardSlot,
+                  tuningSlot,
+                  setTuningSlot,
+                  tuningOffset,
+                  setTuningOffset,
+                  aimOpponentId,
+                  setAimOpponentId,
+                  submit: submitPreparation,
+                }}
                 showBattleResult={showBattleResult}
                 startNextRound={startNextRound}
                 submitAttack={submitAttack}
                 submitBattleAction={submitBattleAction}
-                submitDiscards={submitDiscards}
-                toggleDiscardSlot={toggleDiscardSlot}
                 winnerName={winnerName}
               />
               <aside className="desktop-side-panels" aria-label="Secondary game panels">
