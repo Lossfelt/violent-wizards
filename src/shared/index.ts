@@ -35,12 +35,17 @@ export {
   MAX_FREQUENCY,
   MAX_MADOS,
   MIN_FREQUENCY,
+  SHIELD_DRIFT_MAX,
+  SHIELD_DRIFT_MIN,
+  SHIELD_ROTATION_RANGE,
   STARTING_HEALTH,
   ZERO_DAMAGE_DISTANCE,
   applyEcho,
   calculateDamage,
   circularDistance,
+  clampShieldRotation,
   createInitialInsight,
+  dilateInsight,
   createMado,
   discardMados,
   fillEmptyMadoSlots,
@@ -50,6 +55,7 @@ export {
   mergeSharedInsight,
   normalizeFrequency,
   randomFrequency,
+  randomShieldDrift,
   removeDeadPlayerInsights,
   resolveAttackDeclarations,
   resolveMadoHit,
@@ -92,8 +98,10 @@ export type CurrentPlayerSnapshot = {
   health: number;
   alive: boolean;
   shieldFrequency: number;
+  shieldDrift: number;
   madoSlots: Array<Mado | null>;
   discardedThisRound: number[];
+  rotatingThisRound: boolean;
 };
 
 export type OpponentSnapshot = {
@@ -103,11 +111,20 @@ export type OpponentSnapshot = {
   host: boolean;
   connected: boolean;
   insight: KnownShieldSnapshot;
+  lastRotatedRound: number | null;
 };
 
 export type KnownShieldSnapshot = {
   arcs: FrequencyArc[];
   possibleCount: number;
+  lastNarrowedRound: number | null;
+};
+
+// Rotating a shield is felt by every wizard, so it is public. The new frequency is not.
+export type PublicShieldRotation = {
+  roundNumber: number;
+  playerId: string;
+  playerName: string;
 };
 
 export type ShareableInsightSnapshot = KnownShieldSnapshot & {
@@ -171,6 +188,7 @@ export type GameSnapshot = {
   pendingBattles: RoundBattlePreview[];
   currentBattle: CurrentBattleSnapshot | null;
   battleHistory: PublicBattleHistoryEntry[];
+  shieldRotations: PublicShieldRotation[];
   unmatchedAttackerIds: string[];
   winnerPlayerId: string | null;
   draw: boolean;
@@ -212,7 +230,7 @@ export type ClientToServerEvents = {
     acknowledge: (result: GameActionResult) => void,
   ) => void;
   "round:attack": (
-    payload: { targetPlayerId: string | null },
+    payload: { targetPlayerId: string | null; rotation?: number | null },
     acknowledge: (result: GameActionResult) => void,
   ) => void;
   "battle:action": (

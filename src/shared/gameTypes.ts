@@ -22,8 +22,10 @@ export type FrequencyArc = {
 export type EchoBand = "glowing" | "warm" | "lukewarm" | "cold";
 
 // Every shield frequency that is still consistent with what the holder has learned.
+// Drift and rotation widen the set over time; echoes and shared insight narrow it.
 export type InsightState = {
   candidates: number[];
+  lastNarrowedRound: number | null;
 };
 
 export type InsightTransfer = {
@@ -40,9 +42,11 @@ export type Player = {
   health: number;
   alive: boolean;
   shieldFrequency: number;
+  // Degrees per round the shield moves on its own. Fixed per wizard and hidden from others.
+  shieldDrift: number;
   madoSlots: Array<Mado | null>;
   discardedThisRound: Set<number>;
-  attackIntent?: { targetPlayerId: string } | { pass: true };
+  attackIntent?: { targetPlayerId: string } | { pass: true } | { rotate: { delta: number } };
   insightsByTarget: Record<string, InsightState>;
   receivedInsights: InsightTransfer[];
 };

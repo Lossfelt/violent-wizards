@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { Player } from "./gameTypes.js";
 import {
+  SHIELD_DRIFT_MAX,
+  SHIELD_DRIFT_MIN,
+  SHIELD_ROTATION_RANGE,
   applyEcho,
+  clampShieldRotation,
   calculateDamage,
   circularDistance,
   createInitialInsight,
+  dilateInsight,
   discardMados,
   fillEmptyMadoSlots,
   getEchoBand,
   mergeSharedInsight,
+  randomShieldDrift,
   removeDeadPlayerInsights,
   resolveAttackDeclarations,
   resolveScriptedBattle,
@@ -24,6 +30,7 @@ function makePlayer(overrides: Partial<Player> & Pick<Player, "id">): Player {
     health: overrides.health ?? 100,
     alive: overrides.alive ?? true,
     shieldFrequency: overrides.shieldFrequency ?? 0,
+    shieldDrift: overrides.shieldDrift ?? 0,
     madoSlots: overrides.madoSlots ?? [],
     discardedThisRound: overrides.discardedThisRound ?? new Set(),
     attackIntent: overrides.attackIntent,
@@ -71,7 +78,7 @@ describe("echo and insight rules", () => {
   });
 
   it("keeps only frequencies consistent with an echo", () => {
-    const insight = applyEcho(undefined, 100, "glowing");
+    const insight = applyEcho(undefined, 100, "glowing", 1);
 
     expect(insight.candidates).toHaveLength(31);
     expect(insight.candidates[0]).toBe(85);
@@ -83,7 +90,7 @@ describe("echo and insight rules", () => {
     let insight = createInitialInsight();
 
     for (const madoFrequency of [0, 120, 230]) {
-      insight = applyEcho(insight, madoFrequency, getEchoBand(circularDistance(madoFrequency, shield)));
+      insight = applyEcho(insight, madoFrequency, getEchoBand(circularDistance(madoFrequency, shield)), 1);
     }
 
     expect(insight.candidates).toContain(shield);
@@ -91,24 +98,66 @@ describe("echo and insight rules", () => {
   });
 
   it("merges shared insight as an intersection", () => {
-    const receiver = applyEcho(undefined, 0, "lukewarm");
-    const shared = applyEcho(undefined, 90, "glowing");
-    const merged = mergeSharedInsight(receiver, shared);
+    const receiver = applyEcho(undefined, 0, "lukewarm", 1);
+    const shared = applyEcho(undefined, 90, "glowing", 1);
+    const merged = mergeSharedInsight(receiver, shared, 2);
 
     expect(merged.candidates.every((frequency) => receiver.candidates.includes(frequency))).toBe(true);
     expect(merged.candidates.every((frequency) => shared.candidates.includes(frequency))).toBe(true);
     expect(merged.candidates).toContain(90);
+    expect(merged.lastNarrowedRound).toBe(2);
+  });
+
+  it("records the round an insight was last narrowed", () => {
+    const first = applyEcho(undefined, 100, "glowing", 3);
+    const repeated = applyEcho(first, 100, "glowing", 5);
+
+    expect(first.lastNarrowedRound).toBe(3);
+    expect(repeated.lastNarrowedRound).toBe(3);
   });
 
   it("turns candidates into arcs and joins arcs across zero degrees", () => {
     expect(toFrequencyArcs(createInitialInsight().candidates)).toEqual([{ start: 0, end: 360 }]);
-    expect(toFrequencyArcs(applyEcho(undefined, 0, "glowing").candidates)).toEqual([
+    expect(toFrequencyArcs(applyEcho(undefined, 0, "glowing", 1).candidates)).toEqual([
       { start: 345, end: 376 },
     ]);
-    expect(toFrequencyArcs(applyEcho(undefined, 90, "warm").candidates)).toEqual([
+    expect(toFrequencyArcs(applyEcho(undefined, 90, "warm", 1).candidates)).toEqual([
       { start: 45, end: 75 },
       { start: 106, end: 136 },
     ]);
+  });
+});
+
+describe("drift and rotation rules", () => {
+  it("widens known ranges by the given number of degrees on both sides", () => {
+    const insight = dilateInsight(applyEcho(undefined, 100, "glowing", 1), SHIELD_DRIFT_MAX);
+
+    expect(insight.candidates[0]).toBe(85 - SHIELD_DRIFT_MAX);
+    expect(insight.candidates.at(-1)).toBe(115 + SHIELD_DRIFT_MAX);
+    expect(insight.lastNarrowedRound).toBe(1);
+  });
+
+  it("keeps a drifting shield inside the widened range", () => {
+    let shield = 10;
+    let insight = applyEcho(undefined, shield, "glowing", 1);
+
+    for (let round = 0; round < 10; round += 1) {
+      shield = (shield + 360 - SHIELD_DRIFT_MAX) % 360;
+      insight = dilateInsight(insight, SHIELD_DRIFT_MAX);
+    }
+
+    expect(insight.candidates).toContain(shield);
+  });
+
+  it("picks a drift between the minimum and maximum speed in either direction", () => {
+    expect(randomShieldDrift(() => 0)).toBe(-SHIELD_DRIFT_MIN);
+    expect(randomShieldDrift(() => 0.99)).toBe(SHIELD_DRIFT_MAX);
+  });
+
+  it("limits shield rotation to the rotation range", () => {
+    expect(clampShieldRotation(200)).toBe(SHIELD_ROTATION_RANGE);
+    expect(clampShieldRotation(-75)).toBe(-SHIELD_ROTATION_RANGE);
+    expect(clampShieldRotation(12.4)).toBe(12);
   });
 });
 
@@ -175,6 +224,7 @@ describe("mado and cleanup rules", () => {
         health: 100,
         alive: true,
         shieldFrequency: 90,
+        shieldDrift: 0,
         madoSlots: [],
         discardedThisRound: new Set(),
         insightsByTarget: {
@@ -196,6 +246,7 @@ describe("mado and cleanup rules", () => {
         health: 0,
         alive: false,
         shieldFrequency: 181,
+        shieldDrift: 0,
         madoSlots: [],
         discardedThisRound: new Set(),
         insightsByTarget: {},

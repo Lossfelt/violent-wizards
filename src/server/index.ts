@@ -18,21 +18,28 @@ import type {
   MatchmakingBattle,
   Player,
   PublicBattleHistoryEntry,
+  PublicShieldRotation,
   RoundBattlePreview,
   ServerStatus,
   ServerToClientEvents,
   SocketData,
 } from "../shared/index.js";
 import {
+  SHIELD_DRIFT_MAX,
+  SHIELD_ROTATION_RANGE,
   STARTING_HEALTH,
   applyEcho,
+  clampShieldRotation,
   createInitialInsight,
+  dilateInsight,
   discardMados,
   fillEmptyMadoSlots,
   fleeMultiplierForRound,
   isInsightNarrowed,
   mergeSharedInsight,
+  normalizeFrequency,
   randomFrequency,
+  randomShieldDrift,
   removeDeadPlayerInsights,
   resolveAttackDeclarations,
   resolveMadoHit,
@@ -88,6 +95,7 @@ type LobbyGame = {
   winnerPlayerId: string | null;
   draw: boolean;
   battleHistory: PublicBattleHistoryEntry[];
+  shieldRotations: PublicShieldRotation[];
 };
 
 type GameSocket = Socket<
@@ -222,6 +230,7 @@ function createKnownShieldSnapshot(insight: InsightState | undefined) {
   return {
     arcs: toFrequencyArcs(candidates),
     possibleCount: candidates.length,
+    lastNarrowedRound: insight?.lastNarrowedRound ?? null,
   };
 }
 
@@ -245,8 +254,10 @@ function createGameSnapshot(game: LobbyGame, currentPlayerId: string): GameSnaps
         currentPlayer.health,
       alive: currentPlayer.alive,
       shieldFrequency: currentPlayer.shieldFrequency,
+      shieldDrift: currentPlayer.shieldDrift,
       madoSlots: currentPlayer.madoSlots,
       discardedThisRound: [...currentPlayer.discardedThisRound],
+      rotatingThisRound: isRotating(currentPlayer),
     },
     opponents: [...game.playersById.values()]
       .filter((player) => player.id !== currentPlayerId)
@@ -256,6 +267,9 @@ function createGameSnapshot(game: LobbyGame, currentPlayerId: string): GameSnaps
         alive: game.gamePlayersById.get(player.id)?.alive ?? true,
         host: player.host,
         connected: player.connected,
+        lastRotatedRound:
+          game.shieldRotations.filter((rotation) => rotation.playerId === player.id).at(-1)
+            ?.roundNumber ?? null,
         insight: createKnownShieldSnapshot(currentPlayer.insightsByTarget[player.id]),
       })),
     shareableInsights: Object.entries(currentPlayer.insightsByTarget)
@@ -273,6 +287,7 @@ function createGameSnapshot(game: LobbyGame, currentPlayerId: string): GameSnaps
     ),
     currentBattle: createCurrentBattleSnapshot(game, currentPlayerId),
     battleHistory: game.battleHistory,
+    shieldRotations: game.shieldRotations,
     unmatchedAttackerIds: game.unmatchedAttackerIds,
     winnerPlayerId: game.winnerPlayerId,
     draw: game.draw,
@@ -337,6 +352,7 @@ function createGameForPlayer(
     winnerPlayerId: null,
     draw: false,
     battleHistory: [],
+    shieldRotations: [],
   };
 
   gamesByCode.set(code, game);
@@ -425,6 +441,7 @@ function createPlayerFromLobbyPlayer(player: LobbyPlayer): Player {
     health: STARTING_HEALTH,
     alive: true,
     shieldFrequency: randomFrequency(),
+    shieldDrift: randomShieldDrift(),
     madoSlots: fillEmptyMadoSlots([], (slotIndex) => {
       return `p-${player.id}-r-1-s-${slotIndex}-${crypto.randomUUID()}`;
     }),
@@ -469,6 +486,8 @@ function startGame(socket: GameSocket): GameActionResult {
   game.unmatchedAttackerIds = [];
   game.winnerPlayerId = null;
   game.draw = false;
+  game.battleHistory = [];
+  game.shieldRotations = [];
 
   for (const player of game.gamePlayersById.values()) {
     player.insightsByTarget = Object.fromEntries(
@@ -500,7 +519,10 @@ function createActiveBattle(game: LobbyGame, battle: MatchmakingBattle): ActiveB
     status: "active",
     exchanges: [],
     actionsByPlayerId: {},
-    fleeingPlayerIds: new Set(),
+    // A wizard who is rotating their shield cannot fire back, only flee.
+    fleeingPlayerIds: new Set(
+      [playerA, playerB].filter((player) => isRotating(player)).map((player) => player.id),
+    ),
     usedMadoSlotIndexesByPlayerId: {
       [battle.playerAId]: new Set<number>(),
       [battle.playerBId]: new Set<number>(),
@@ -664,6 +686,7 @@ function resolveReadyBattleExchange(game: LobbyGame, battle: ActiveBattle) {
       attacker.insightsByTarget[defender.id],
       mado.frequency,
       hit.echo,
+      game.roundNumber,
     );
     battle.usedMadoSlotIndexesByPlayerId[attacker.id]!.add(action.madoSlotIndex);
     usedThisExchange[attacker.id]!.push(action.madoSlotIndex);
@@ -728,6 +751,7 @@ function startNextRound(socket: GameSocket): GameActionResult {
 
   game.roundNumber += 1;
   game.status = "round_prepare";
+  driftShields(game);
   game.discardSubmittedPlayerIds = new Set();
   game.attackSubmittedPlayerIds = new Set();
   game.pendingBattles = [];
@@ -779,6 +803,8 @@ function commitFinishedRoundIfReady(game: LobbyGame) {
       ),
     });
   }
+
+  applyShieldRotations(game);
 
   const cleanedPlayers = removeDeadPlayerInsights([...game.gamePlayersById.values()]);
   game.gamePlayersById = new Map(cleanedPlayers.map((player) => [player.id, player]));
@@ -864,6 +890,7 @@ function shareInsight(
   receiver.insightsByTarget[target.id] = mergeSharedInsight(
     receiver.insightsByTarget[target.id],
     senderInsight,
+    game.roundNumber,
   );
 
   const transfer = {
@@ -933,9 +960,52 @@ function submitDiscards(
   return { ok: true, game: createGameSnapshot(game, playerId) };
 }
 
+function isRotating(player: Player): boolean {
+  return player.attackIntent !== undefined && "rotate" in player.attackIntent;
+}
+
+function driftShields(game: LobbyGame) {
+  for (const player of game.gamePlayersById.values()) {
+    if (player.alive) {
+      player.shieldFrequency = normalizeFrequency(player.shieldFrequency + player.shieldDrift);
+    }
+
+    for (const [targetId, insight] of Object.entries(player.insightsByTarget)) {
+      player.insightsByTarget[targetId] = dilateInsight(insight, SHIELD_DRIFT_MAX);
+    }
+  }
+}
+
+function applyShieldRotations(game: LobbyGame) {
+  for (const rotator of game.gamePlayersById.values()) {
+    if (!rotator.alive || !rotator.attackIntent || !("rotate" in rotator.attackIntent)) {
+      continue;
+    }
+
+    rotator.shieldFrequency = normalizeFrequency(
+      rotator.shieldFrequency + rotator.attackIntent.rotate.delta,
+    );
+    // Rotating also resets the drift, so a tracked drift direction is lost too.
+    rotator.shieldDrift = randomShieldDrift();
+    game.shieldRotations.push({
+      roundNumber: game.roundNumber,
+      playerId: rotator.id,
+      playerName: rotator.name,
+    });
+
+    for (const observer of game.gamePlayersById.values()) {
+      const insight = observer.insightsByTarget[rotator.id];
+
+      if (observer.id !== rotator.id && insight) {
+        observer.insightsByTarget[rotator.id] = dilateInsight(insight, SHIELD_ROTATION_RANGE);
+      }
+    }
+  }
+}
+
 function submitAttack(
   socket: GameSocket,
-  payload: { targetPlayerId: string | null },
+  payload: { targetPlayerId: string | null; rotation?: number | null },
 ): GameActionResult {
   const game = getSocketGame(socket);
   const playerId = socket.data.playerId;
@@ -962,7 +1032,18 @@ function submitAttack(
     return { ok: false, error: "Choose a living opponent or pass." };
   }
 
-  player.attackIntent = target ? { targetPlayerId: target.id } : { pass: true };
+  const rotation = payload.rotation ?? null;
+
+  if (rotation !== null && (target || !Number.isFinite(rotation))) {
+    return { ok: false, error: "Rotate your shield or attack, not both." };
+  }
+
+  player.attackIntent =
+    rotation !== null
+      ? { rotate: { delta: clampShieldRotation(rotation) } }
+      : target
+        ? { targetPlayerId: target.id }
+        : { pass: true };
   game.attackSubmittedPlayerIds.add(playerId);
 
   if (livingPlayerIds(game).every((id) => game.attackSubmittedPlayerIds.has(id))) {
@@ -976,6 +1057,10 @@ function submitAttack(
     );
     game.unmatchedAttackerIds = matchmaking.unmatchedAttackerIds;
     game.status = matchmaking.battles.length > 0 ? "battle_resolution" : "round_cleanup";
+
+    if (game.status === "round_cleanup") {
+      applyShieldRotations(game);
+    }
   }
 
   emitGameUpdate(game);

@@ -30,6 +30,8 @@ import {
   FREQUENCY_COUNT,
   MADO_TUNE_RANGE,
   MAX_MADOS,
+  SHIELD_DRIFT_MAX,
+  SHIELD_ROTATION_RANGE,
   STARTING_HEALTH,
   normalizeFrequency,
 } from "../shared";
@@ -299,6 +301,12 @@ function RulesModal({ onClose }: { onClose: () => void }) {
               spread your first shots to find the shield, then fire and tune toward it.
             </p>
             <p>
+              Shields never stand still. Each one drifts a hidden 2 to {SHIELD_DRIFT_MAX}° per round in a
+              fixed direction, so known ranges widen every round until a new echo narrows them again.
+              Instead of attacking you can rotate your own shield up to {SHIELD_ROTATION_RANGE}°. Everyone
+              senses it and loses precision on you, but if you are attacked that round you can only flee.
+            </p>
+            <p>
               Known ranges can be shared with other living players outside active battles. The receiver
               keeps only the part of the circle both of you agree on. The last living wizard wins. If
               nobody survives, the game is a draw.
@@ -563,6 +571,7 @@ function PlayerStatusPanel({ game }: { game: GameSnapshot }) {
             <span>Shield frequency</span>
           </div>
           <small>Hidden from opponents</small>
+          <small className="drift-copy">{describeDrift(game.currentPlayer.shieldDrift)}</small>
         </div>
         <FrequencyWheel
           label="Your shield frequency"
@@ -822,6 +831,66 @@ function PreparePanel({
   );
 }
 
+type Rotation = {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  offset: number;
+  setOffset: (offset: number) => void;
+};
+
+function RotationPanel({
+  game,
+  rotation,
+  submitAttack,
+}: {
+  game: GameSnapshot;
+  rotation: Rotation;
+  submitAttack: (targetPlayerId: string | null, rotation?: number) => void;
+}) {
+  const current = game.currentPlayer.shieldFrequency;
+  const rotated = normalizeFrequency(current + rotation.offset);
+
+  return (
+    <div className="tune-panel rotation-panel">
+      <FrequencyWheel
+        ghostMarker={current}
+        label={`Your shield rotated to ${rotated} degrees`}
+        marker={rotated}
+        size="large"
+      />
+      <div className="tune-slider">
+        <label>
+          <span>
+            Shield: {Math.round(current)}° → {rotated}°
+          </span>
+          <input
+            max={SHIELD_ROTATION_RANGE}
+            min={-SHIELD_ROTATION_RANGE}
+            onChange={(event) => rotation.setOffset(Number(event.target.value))}
+            step={1}
+            type="range"
+            value={rotation.offset}
+          />
+        </label>
+        <small>
+          You skip your attack. If someone attacks you this round you can only flee. Every wizard
+          senses the rotation and their knowledge of your shield widens by {SHIELD_ROTATION_RANGE}°,
+          but nobody learns where it went. Your drift also changes.
+        </small>
+        <button className="teal-button" onClick={() => submitAttack(null, rotation.offset)} type="button">
+          Rotate shield
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function describeDrift(drift: number) {
+  const direction = drift > 0 ? "clockwise" : "counterclockwise";
+
+  return `Drifts ${Math.abs(drift)}° ${direction} each round`;
+}
+
 function PrimaryPhasePanel({
   currentBattle,
   game,
@@ -833,6 +902,7 @@ function PrimaryPhasePanel({
   totalBattleDamageTaken,
   mustChooseBattleAction,
   preparation,
+  rotation,
   showBattleResult,
   startNextRound,
   submitAttack,
@@ -849,9 +919,10 @@ function PrimaryPhasePanel({
   totalBattleDamageTaken: number;
   mustChooseBattleAction: boolean;
   preparation: Preparation;
+  rotation: Rotation;
   showBattleResult: boolean;
   startNextRound: () => void;
-  submitAttack: (targetPlayerId: string | null) => void;
+  submitAttack: (targetPlayerId: string | null, rotation?: number) => void;
   submitBattleAction: (action: ExchangeAction) => void;
   winnerName: string | undefined;
 }) {
@@ -877,7 +948,7 @@ function PrimaryPhasePanel({
       <section className={primaryPhaseClassName}>
         <div className="phase-heading">
           <h2>Choose attack</h2>
-          <p>Pick one living opponent, or pass to stay hidden this round.</p>
+          <p>Pick one living opponent, pass to stay hidden, or rotate your shield.</p>
         </div>
         <div className="target-list">
           {game.opponents
@@ -895,9 +966,24 @@ function PrimaryPhasePanel({
           <button disabled={hasSubmittedAttack} onClick={() => submitAttack(null)} type="button">
             Pass
           </button>
+          <button
+            aria-pressed={rotation.open}
+            disabled={hasSubmittedAttack}
+            onClick={() => rotation.setOpen(!rotation.open)}
+            type="button"
+          >
+            Rotate shield
+          </button>
         </div>
+        {rotation.open && !hasSubmittedAttack ? (
+          <RotationPanel game={game} rotation={rotation} submitAttack={submitAttack} />
+        ) : null}
         {hasSubmittedAttack ? (
-          <p className="waiting-copy">Waiting for declarations.</p>
+          <p className="waiting-copy">
+            {game.currentPlayer.rotatingThisRound
+              ? "You are rotating your shield. Waiting for declarations."
+              : "Waiting for declarations."}
+          </p>
         ) : null}
       </section>
     );
@@ -930,7 +1016,11 @@ function PrimaryPhasePanel({
               </div>
             ) : null}
             {isFleeing ? (
-              <p className="waiting-copy">You are fleeing.</p>
+              <p className="waiting-copy">
+                {game.currentPlayer.rotatingThisRound
+                  ? "You are rotating your shield and can only flee."
+                  : "You are fleeing."}
+              </p>
             ) : mustChooseBattleAction ? (
               <>
                 <p>
@@ -1071,6 +1161,12 @@ function OpponentsPanel({ game }: { game: GameSnapshot }) {
             />
             <small className="insight-copy">
               {describePossibleRange(opponent.insight.possibleCount)}
+              {opponent.insight.lastNarrowedRound !== null
+                ? ` / last echo round ${opponent.insight.lastNarrowedRound}`
+                : ""}
+              {opponent.lastRotatedRound !== null
+                ? ` / rotated round ${opponent.lastRotatedRound}`
+                : ""}
             </small>
           </div>
         ))}
@@ -1162,6 +1258,17 @@ function ShareInsightPanel({
 }
 
 function BattleHistoryPanel({ game }: { game: GameSnapshot }) {
+  const rotations =
+    game.shieldRotations.length > 0 ? (
+      <div className="battle-list">
+        {game.shieldRotations.slice(-4).map((rotation) => (
+          <div className="battle-row rotation-row" key={`${rotation.playerId}-${rotation.roundNumber}`}>
+            Round {rotation.roundNumber}: {rotation.playerName} rotated their shield
+          </div>
+        ))}
+      </div>
+    ) : null;
+
   if (game.battleHistory.length === 0) {
     return (
       <section className="phase-panel history-panel">
@@ -1170,6 +1277,7 @@ function BattleHistoryPanel({ game }: { game: GameSnapshot }) {
           <h2>Battle history</h2>
         </div>
         <p>No battles recorded yet.</p>
+        {rotations}
       </section>
     );
   }
@@ -1189,6 +1297,7 @@ function BattleHistoryPanel({ game }: { game: GameSnapshot }) {
           </div>
         ))}
       </div>
+      {rotations}
     </section>
   );
 }
@@ -1277,6 +1386,8 @@ export function App() {
   const [tuningSlot, setTuningSlot] = useState<number | null>(null);
   const [tuningOffset, setTuningOffset] = useState(0);
   const [aimOpponentId, setAimOpponentId] = useState("");
+  const [rotationOpen, setRotationOpen] = useState(false);
+  const [rotationOffset, setRotationOffset] = useState(0);
   const [shareReceiverId, setShareReceiverId] = useState("");
   const [shareTargetId, setShareTargetId] = useState("");
   const [showBattleResult, setShowBattleResult] = useState(false);
@@ -1461,11 +1572,13 @@ export function App() {
     );
   }
 
-  function submitAttack(targetPlayerId: string | null) {
+  function submitAttack(targetPlayerId: string | null, rotation?: number) {
     setGameError(null);
-    socket.emit("round:attack", { targetPlayerId }, (result) => {
+    socket.emit("round:attack", { targetPlayerId, rotation: rotation ?? null }, (result) => {
       if (result.ok) {
         setGame(result.game);
+        setRotationOpen(false);
+        setRotationOffset(0);
         return;
       }
 
@@ -1653,6 +1766,12 @@ export function App() {
                   aimOpponentId,
                   setAimOpponentId,
                   submit: submitPreparation,
+                }}
+                rotation={{
+                  open: rotationOpen,
+                  setOpen: setRotationOpen,
+                  offset: rotationOffset,
+                  setOffset: setRotationOffset,
                 }}
                 showBattleResult={showBattleResult}
                 startNextRound={startNextRound}

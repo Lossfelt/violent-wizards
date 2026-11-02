@@ -95,13 +95,20 @@ Hver spiller sin helse starter på 200 poeng. Spillernes helse er skjult for hve
   * Ekkoet avhenger bare av frekvensavstanden, ikke av fluktreduksjonen.
   * Hver utveksling er simultan så lenge begge spillere skyter Mados. Hvis begge spillere tar dødelig skade i samme utveksling, dør begge. Hvis dette gjør at ingen spillere er igjen i live, ender spillet uavgjort.
 
+## Drift og rotasjon av skjold
+
+* Hvert skjold driver av seg selv 2 til 6° per runde. Retning og fart er fast for hver trollmann og skjult for andre, men man ser sin egen.
+* Kunnskap om andres skjold blir derfor eldre for hver runde: de kjente buene utvides med 6° på hver side hver runde, og motstanderlisten viser i hvilken runde man sist fikk et ekko. Den sanne frekvensen er alltid innenfor buen.
+* Tilfeldig drift (frem og tilbake) ble forkastet etter simulering: små tilfeldige steg nuller hverandre ut, og kunnskap var nesten like presis etter 8 runder. Med fast retning gir et fulltreff-estimat fullt treff i omtrent 80 % av tilfellene etter 3 runder, 40 % etter 5 og 0 % etter 8.
+* I stedet for å angripe kan man rotere sitt eget skjold opptil 60° i valgfri retning. Rotasjonen skjer når runden avsluttes.
+  * Alle trollmenn føler rotasjonen, så den er offentlig og vises i historikken. Den nye frekvensen er hemmelig, og alle andres kunnskap om skjoldet utvides med 60°.
+  * Driften får ny, tilfeldig retning og fart, så en motstander som har lært seg driftretningen mister også det.
+  * Prisen: man angriper ikke den runden, og blir man angrepet kan man bare flykte.
+
 ## Idéer til senere versjoner
 
-- Skjold kan senere ha en fast basefrekvens kombinert med en liten drift eller faseoffset. Da kan informasjon om en annen spiller fortsatt være verdifull, men ikke være en helt presis og permanent fasit.
 - Informasjon om skjoldfrekvenser kan gjøres mindre permanent ved at man lærer intervaller, sektorer eller profiler, ikke eksakte grader.
 - Helse kan senere kobles til skjoldstabilitet. Lav helse kan da gjøre at dårlig frekvensmatch fortsatt slipper gjennom litt skade, mens god frekvensmatch blir farligere.
 - Mulig med helbredelse i noen grad
 - Grunnskaden til hver Mado kan variere, eller det kan være ulike typer Mados med forksjellige egenskaper (disse vil da også oppstå sjeldnere og være mer verdifulle å bruke)
-- Kanskje man hver runde velger mellom å benytte Mados, og å rotere skjoldet sitt? Rotasjon av skjoldet vil være å endre skjoldfrekvensen noe (men ikke for mye, for å ikke gjøre andres info helt ugyldig). Man ofrer da muligheten til å slåss eller å forsvare seg, men det kan hjelpe hvis motstandere har peilet seg inn på frekvensen din. Det vil også innebære at man kun kan flykte hvis man blir angrepet. Risikabelt, men kanskje verdt det?
-  * Evt at man må forkaste alle sine Mados for å kunne rotere skjoldet.
 * For at det skal være et insentiv til kamp, slik at den beste strategien ikke er å la være å slåss for å vente til de andre er skadet og så angripe de svake, så kunne jeg introdusert en midlertidig/permanent bonus man får etter å ha vært i kamp. Feks Momentum: for hver runde du har vært i kamp får du +1 Momentum. Hver Momentum gjør at dine Mados gjør 10% mer skade. Hvis du ikke slåss en runde så mister du all Momentum.

@@ -28,6 +28,11 @@ export const ECHO_BANDS: ReadonlyArray<{ band: EchoBand; maxDistance: number }> 
   { band: "cold", maxDistance: 180 },
 ];
 export const MADO_TUNE_RANGE = 60;
+// Every shield drifts a fixed, hidden 2 to 6 degrees per round in one direction. Random
+// steps cancel out and barely age knowledge; a steady drift makes old readings go stale.
+export const SHIELD_DRIFT_MIN = 2;
+export const SHIELD_DRIFT_MAX = 6;
+export const SHIELD_ROTATION_RANGE = 60;
 export const FLEE_DAMAGE_MULTIPLIERS = [0.5, 0.4, 0.3, 0.2, 0.1] as const;
 
 export function normalizeFrequency(frequency: number): number {
@@ -91,7 +96,53 @@ export function fleeMultiplierForRound(fleeRoundIndex: number): number {
 export function createInitialInsight(): InsightState {
   return {
     candidates: Array.from({ length: FREQUENCY_COUNT }, (_, frequency) => frequency),
+    lastNarrowedRound: null,
   };
+}
+
+function narrowInsight(
+  current: InsightState,
+  candidates: number[],
+  roundNumber: number,
+): InsightState {
+  return {
+    candidates,
+    lastNarrowedRound:
+      candidates.length < current.candidates.length ? roundNumber : current.lastNarrowedRound,
+  };
+}
+
+// Widens known ranges by the most the shield can have moved, so the true frequency
+// always stays inside the candidate set.
+export function dilateInsight(insight: InsightState, degrees: number): InsightState {
+  if (degrees <= 0 || insight.candidates.length >= FREQUENCY_COUNT) {
+    return insight;
+  }
+
+  const known = new Set(insight.candidates);
+  const candidates: number[] = [];
+
+  for (let frequency = 0; frequency < FREQUENCY_COUNT; frequency += 1) {
+    for (let offset = -degrees; offset <= degrees; offset += 1) {
+      if (known.has(normalizeFrequency(frequency + offset))) {
+        candidates.push(frequency);
+        break;
+      }
+    }
+  }
+
+  return { ...insight, candidates };
+}
+
+export function randomShieldDrift(random = Math.random): number {
+  const speed =
+    SHIELD_DRIFT_MIN + Math.floor(random() * (SHIELD_DRIFT_MAX - SHIELD_DRIFT_MIN + 1));
+
+  return random() < 0.5 ? -speed : speed;
+}
+
+export function clampShieldRotation(delta: number): number {
+  return Math.max(-SHIELD_ROTATION_RANGE, Math.min(SHIELD_ROTATION_RANGE, Math.round(delta)));
 }
 
 export function isInsightNarrowed(insight: InsightState | undefined): boolean {
@@ -102,26 +153,26 @@ export function applyEcho(
   current: InsightState | undefined,
   madoFrequency: number,
   echo: EchoBand,
+  roundNumber: number,
 ): InsightState {
   const existing = current ?? createInitialInsight();
+  const candidates = existing.candidates.filter(
+    (frequency) => getEchoBand(circularDistance(madoFrequency, frequency)) === echo,
+  );
 
-  return {
-    candidates: existing.candidates.filter(
-      (frequency) => getEchoBand(circularDistance(madoFrequency, frequency)) === echo,
-    ),
-  };
+  return narrowInsight(existing, candidates, roundNumber);
 }
 
 export function mergeSharedInsight(
   receiverCurrent: InsightState | undefined,
   shared: InsightState,
+  roundNumber: number,
 ): InsightState {
   const current = receiverCurrent ?? createInitialInsight();
   const sharedCandidates = new Set(shared.candidates);
+  const candidates = current.candidates.filter((frequency) => sharedCandidates.has(frequency));
 
-  return {
-    candidates: current.candidates.filter((frequency) => sharedCandidates.has(frequency)),
-  };
+  return narrowInsight(current, candidates, roundNumber);
 }
 
 export function toFrequencyArcs(candidates: number[]): FrequencyArc[] {

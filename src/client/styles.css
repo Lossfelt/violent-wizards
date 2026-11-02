@@ -1824,3 +1824,34 @@ h1 {
     width: 100%;
   }
 }
+
+/* Shield rotation */
+
+.rotation-panel label {
+  display: grid;
+  gap: 10px;
+}
+
+.rotation-panel small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.target-list button[aria-pressed="true"] {
+  border-color: rgba(94, 224, 194, 0.86);
+  color: #d8fff7;
+}
+
+.rotation-row {
+  border-color: rgba(94, 224, 194, 0.32);
+  color: var(--teal);
+}
+
+.drift-copy {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted) !important;
+  text-transform: none !important;
+}
