@@ -39,6 +39,7 @@ type DrawerId = "opponents" | "share" | "history";
 type PrepareMode = "discard" | "tune";
 
 const SESSION_STORAGE_KEY = "violent-wizards-session-id";
+const GAME_CODE_STORAGE_KEY = "violent-wizards-game-code";
 const SERVER_URL = import.meta.env.VITE_SERVER_URL;
 const WHEEL_SIZE = 72;
 const WHEEL_CENTER = WHEEL_SIZE / 2;
@@ -1292,6 +1293,31 @@ export function App() {
     function handleConnect() {
       setConnectionState("connected");
       setConnectionError(null);
+
+      // A new socket has no game attached on the server, so rejoin the last game
+      // this session was in. Covers dropped connections and page reloads.
+      const savedCode = window.localStorage.getItem(GAME_CODE_STORAGE_KEY);
+      const linkedCode = new URLSearchParams(window.location.search).get("code");
+
+      // A join link for another game means the player wants that game instead.
+      if (!savedCode || (linkedCode && linkedCode !== savedCode)) {
+        return;
+      }
+
+      socket.emit("session:resume", { sessionId, code: savedCode }, (result) => {
+        if (result.ok && "game" in result) {
+          setGame(result.game);
+          setLobby(null);
+          return;
+        }
+
+        if (result.ok && "lobby" in result) {
+          setLobby(result.lobby);
+          return;
+        }
+
+        window.localStorage.removeItem(GAME_CODE_STORAGE_KEY);
+      });
     }
 
     function handleDisconnect() {
@@ -1325,7 +1351,18 @@ export function App() {
       socket.off("game:updated", handleGameUpdate);
       socket.disconnect();
     };
-  }, [socket]);
+  }, [socket, sessionId]);
+
+  const activeGameCode = game?.code ?? lobby?.code ?? null;
+  const gameFinished = game?.status === "finished";
+
+  useEffect(() => {
+    if (gameFinished) {
+      window.localStorage.removeItem(GAME_CODE_STORAGE_KEY);
+    } else if (activeGameCode) {
+      window.localStorage.setItem(GAME_CODE_STORAGE_KEY, activeGameCode);
+    }
+  }, [activeGameCode, gameFinished]);
 
   function createLobby() {
     setLobbyError(null);

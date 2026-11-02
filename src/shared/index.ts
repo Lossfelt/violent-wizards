@@ -198,6 +198,10 @@ export type ClientToServerEvents = {
     payload: { sessionId: string; name: string },
     acknowledge: (result: LobbyActionResult) => void,
   ) => void;
+  "session:resume": (
+    payload: { sessionId: string; code: string },
+    acknowledge: (result: LobbyActionResult) => void,
+  ) => void;
   "lobby:join": (
     payload: { sessionId: string; name: string; code: string },
     acknowledge: (result: LobbyActionResult) => void,

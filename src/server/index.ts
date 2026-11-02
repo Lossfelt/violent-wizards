@@ -386,6 +386,30 @@ function joinGameForPlayer(
   return { ok: true, lobby: createLobbySnapshot(game, player.id) };
 }
 
+// Reattaches a returning session (after a dropped connection or a page reload) without
+// renaming the player or letting a new player into a started game.
+function resumeSessionForPlayer(
+  socket: GameSocket,
+  payload: { sessionId: string; code: string },
+): LobbyActionResult {
+  const game = gamesByCode.get(normalizeLobbyCode(payload.code));
+  const player = game ? findPlayerBySession(game, payload.sessionId) : undefined;
+
+  if (!game || !player) {
+    return { ok: false, error: "That game is no longer available." };
+  }
+
+  player.connected = true;
+  attachSocketToPlayer(game, socket, player);
+  emitGameUpdate(game);
+
+  if (game.status !== "lobby") {
+    return { ok: true, game: createGameSnapshot(game, player.id) };
+  }
+
+  return { ok: true, lobby: createLobbySnapshot(game, player.id) };
+}
+
 function getSocketGame(socket: GameSocket): LobbyGame | undefined {
   if (!socket.data.gameCode) {
     return undefined;
@@ -988,6 +1012,10 @@ io.on("connection", (socket) => {
 
   socket.on("lobby:create", (payload, acknowledge) => {
     acknowledge(createGameForPlayer(socket, payload));
+  });
+
+  socket.on("session:resume", (payload, acknowledge) => {
+    acknowledge(resumeSessionForPlayer(socket, payload));
   });
 
   socket.on("lobby:join", (payload, acknowledge) => {
