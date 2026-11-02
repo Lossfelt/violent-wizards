@@ -294,13 +294,17 @@ function createGameSnapshot(game: LobbyGame, currentPlayerId: string): GameSnaps
   };
 }
 
+// A player can briefly have more than one socket, for example when a phone reconnects
+// before the server has noticed that the old connection died. Every one of them gets updates.
+function socketsForPlayer(playerId: string): GameSocket[] {
+  return [...io.sockets.sockets.values()].filter(
+    (candidate) => candidate.data.playerId === playerId,
+  );
+}
+
 function emitGameUpdate(game: LobbyGame) {
   for (const player of game.playersById.values()) {
-    const socket = [...io.sockets.sockets.values()].find(
-      (candidate) => candidate.data.playerId === player.id,
-    );
-
-    if (socket) {
+    for (const socket of socketsForPlayer(player.id)) {
       if (game.status === "lobby") {
         socket.emit("lobby:updated", createLobbySnapshot(game, player.id));
       } else {
@@ -1136,7 +1140,7 @@ io.on("connection", (socket) => {
       const game = gamesByCode.get(socket.data.gameCode);
       const player = game?.playersById.get(socket.data.playerId);
 
-      if (game && player) {
+      if (game && player && socketsForPlayer(player.id).length === 0) {
         player.connected = false;
         emitGameUpdate(game);
       }
