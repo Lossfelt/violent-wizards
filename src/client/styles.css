@@ -398,7 +398,6 @@ h1 {
   grid-area: hud;
   display: grid;
   grid-template-columns:
-    minmax(180px, 1.15fr)
     minmax(112px, 0.7fr)
     minmax(112px, 0.7fr)
     minmax(160px, 1fr);
@@ -773,7 +772,7 @@ h1 {
     inset 0 1px 0 rgba(245, 232, 202, 0.06);
 }
 
-.mado-button[data-selected="true"] {
+.mado-button[data-discard="true"] {
   border-color: rgba(240, 110, 99, 0.86);
   background:
     linear-gradient(145deg, rgba(240, 110, 99, 0.2), rgba(240, 110, 99, 0.08)),
@@ -783,7 +782,7 @@ h1 {
     inset 0 0 30px rgba(240, 110, 99, 0.08);
 }
 
-.mado-button[data-selected="true"]::after {
+.mado-button[data-discard="true"]::after {
   content: "Discard";
   position: absolute;
   top: 8px;
@@ -1334,7 +1333,7 @@ h1 {
   }
 
   .game-hud {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .desktop-side-panels {
@@ -1451,10 +1450,6 @@ h1 {
 
   .hud-phase {
     display: none;
-  }
-
-  .hud-health {
-    grid-column: 1 / -1;
   }
 
   .primary-phase {
@@ -1700,26 +1695,6 @@ h1 {
   width: min(100%, 520px);
 }
 
-.mode-switch {
-  display: inline-flex;
-  border: 1px solid var(--border-muted);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.mode-switch button {
-  min-height: 44px;
-  border: 0;
-  border-radius: 0;
-  padding: 0 18px;
-  background: transparent;
-}
-
-.mode-switch button[aria-pressed="true"] {
-  color: #171009;
-  background: linear-gradient(180deg, var(--gold-2), var(--gold));
-}
-
 .aim-select {
   display: grid;
   flex: 1 1 180px;
@@ -1733,7 +1708,7 @@ h1 {
   min-height: 44px;
 }
 
-.mado-grid[data-tone="tune"] .mado-button[data-selected="true"] {
+.mado-button[data-tuned="true"] {
   border-color: rgba(94, 224, 194, 0.86);
   background:
     linear-gradient(145deg, rgba(94, 224, 194, 0.18), rgba(94, 224, 194, 0.06)),
@@ -1743,11 +1718,19 @@ h1 {
     inset 0 0 30px rgba(94, 224, 194, 0.08);
 }
 
-.mado-grid[data-tone="tune"] .mado-button[data-selected="true"]::after {
-  content: "Tune";
-  border-color: rgba(94, 224, 194, 0.55);
+.mado-button[data-tuned="true"]::after {
+  content: "Tuned";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: 1px solid rgba(94, 224, 194, 0.55);
+  border-radius: 999px;
+  padding: 3px 7px;
   color: #d8fff7;
   background: rgba(7, 82, 78, 0.8);
+  font-size: 0.64rem;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .tune-panel {
@@ -1923,4 +1906,54 @@ h1 {
   font-size: 0.8rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+}
+
+/* Unified Mado preparation */
+
+.mado-button[data-active="true"] {
+  outline: 2px solid var(--gold-2);
+  outline-offset: 3px;
+}
+
+.mado-detail label {
+  display: grid;
+  gap: 8px;
+}
+
+.mado-detail label span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.mado-detail small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detail-actions button {
+  min-height: 44px;
+  padding: 0 18px;
+}
+
+.detail-actions button[aria-pressed="true"] {
+  border-color: rgba(240, 110, 99, 0.86);
+  color: #ffd8d2;
+}
+
+.prepare-summary {
+  width: min(100%, 520px);
+  margin: 0;
+  color: var(--teal);
+  font-size: 0.88rem;
+  font-weight: 800;
+  text-align: center;
 }

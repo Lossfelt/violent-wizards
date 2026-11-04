@@ -38,7 +38,6 @@ import {
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 type DrawerId = "opponents" | "share" | "history";
-type PrepareMode = "discard" | "tune";
 
 const SESSION_STORAGE_KEY = "violent-wizards-session-id";
 const GAME_CODE_STORAGE_KEY = "violent-wizards-game-code";
@@ -495,8 +494,6 @@ function LobbyPanel({
 }
 
 function GameHud({ game }: { game: GameSnapshot }) {
-  const health = Math.ceil(game.currentPlayer.health);
-  const healthPercent = clampPercent((health / STARTING_HEALTH) * 100);
   const filledMados = game.currentPlayer.madoSlots.filter(Boolean).length;
   const liveOpponents = game.opponents.filter((opponent) => opponent.alive).length;
   const currentPhase =
@@ -505,14 +502,6 @@ function GameHud({ game }: { game: GameSnapshot }) {
 
   return (
     <section className="game-hud" aria-label="Current game status">
-      <div className="hud-cell hud-health">
-        <Heart size={18} aria-hidden="true" />
-        <span>Health</span>
-        <strong>{health}</strong>
-        <div className="hud-meter" aria-hidden="true">
-          <span style={{ width: healthPercent }} />
-        </div>
-      </div>
       <div className="hud-cell">
         <Radio size={18} aria-hidden="true" />
         <span>Mados</span>
@@ -601,28 +590,30 @@ function PlayerStatusPanel({ game }: { game: GameSnapshot }) {
 }
 
 function MadoSlotGrid({
+  activeSlotIndex = null,
   disabled,
   disabledSlotIndexes = [],
+  discardSlotIndexes = [],
   frequencyOverrides = {},
   onSlotClick,
   overlayArcs,
-  selectedSlotIndexes = [],
-  selectionTone,
   slots,
+  tunedSlotIndex = null,
   usedSlotIndexes = [],
 }: {
+  activeSlotIndex?: number | null;
   disabled?: boolean;
   disabledSlotIndexes?: number[];
+  discardSlotIndexes?: number[];
   frequencyOverrides?: Record<number, number>;
   onSlotClick?: (slotIndex: number, mado: Mado) => void;
   overlayArcs?: FrequencyArc[];
-  selectedSlotIndexes?: number[];
-  selectionTone?: "tune";
   slots: Array<Mado | null>;
+  tunedSlotIndex?: number | null;
   usedSlotIndexes?: number[];
 }) {
   return (
-    <div className="mado-grid" data-tone={selectionTone}>
+    <div className="mado-grid">
       {slots.map((mado, index) => {
         const isDisabled = disabled || mado === null || disabledSlotIndexes.includes(index);
         const frequency = frequencyOverrides[index] ?? mado?.frequency;
@@ -630,7 +621,10 @@ function MadoSlotGrid({
         return (
           <button
             className="mado-button"
-            data-selected={selectedSlotIndexes.includes(index)}
+            aria-pressed={activeSlotIndex === null ? undefined : activeSlotIndex === index}
+            data-active={activeSlotIndex === index}
+            data-discard={discardSlotIndexes.includes(index)}
+            data-tuned={tunedSlotIndex === index}
             data-used={usedSlotIndexes.includes(index)}
             disabled={isDisabled}
             title={frequency !== undefined ? `Mado ${index + 1}: ${Math.round(frequency)}°` : undefined}
@@ -664,8 +658,8 @@ function MadoSlotGrid({
 }
 
 type Preparation = {
-  mode: PrepareMode;
-  setMode: (mode: PrepareMode) => void;
+  activeSlot: number | null;
+  setActiveSlot: (slotIndex: number | null) => void;
   selectedDiscardSlots: number[];
   toggleDiscardSlot: (slotIndex: number) => void;
   tuningSlot: number | null;
@@ -695,6 +689,29 @@ function knownArcs(game: GameSnapshot, opponentId: string | undefined) {
     : undefined;
 }
 
+function describePreparation(
+  slots: Array<Mado | null>,
+  discardSlots: number[],
+  tuningSlot: number | null,
+  tuningOffset: number,
+) {
+  const parts: string[] = [];
+
+  if (discardSlots.length > 0) {
+    const numbers = [...discardSlots].sort((a, b) => a - b).map((slot) => slot + 1);
+    parts.push(`Discarding Mado ${numbers.join(", ")}`);
+  }
+
+  const tuned = tuningSlot === null ? null : slots[tuningSlot];
+
+  if (tuned && tuningSlot !== null && tuningOffset !== 0) {
+    const target = normalizeFrequency(tuned.frequency + tuningOffset);
+    parts.push(`Tuning Mado ${tuningSlot + 1} ${Math.round(tuned.frequency)}° → ${target}°`);
+  }
+
+  return parts.join(". ");
+}
+
 function PreparePanel({
   className,
   game,
@@ -706,35 +723,40 @@ function PreparePanel({
   hasSubmitted: boolean;
   preparation: Preparation;
 }) {
-  const {
-    aimOpponentId,
-    mode,
-    selectedDiscardSlots,
-    tuningOffset,
-    tuningSlot,
-  } = preparation;
+  const { activeSlot, aimOpponentId, selectedDiscardSlots, tuningOffset, tuningSlot } =
+    preparation;
   const slots = game.currentPlayer.madoSlots;
+  const activeMado = activeSlot === null ? null : slots[activeSlot] ?? null;
+  const activeDiscarded = activeSlot !== null && selectedDiscardSlots.includes(activeSlot);
+  const activeOffset = activeSlot !== null && activeSlot === tuningSlot ? tuningOffset : 0;
   const tunedMado = tuningSlot === null ? null : slots[tuningSlot] ?? null;
-  const tunedFrequency = tunedMado
-    ? normalizeFrequency(tunedMado.frequency + tuningOffset)
-    : null;
+  const tunedFrequency =
+    tunedMado && tuningOffset !== 0
+      ? normalizeFrequency(tunedMado.frequency + tuningOffset)
+      : null;
   const aimArcs = knownArcs(game, aimOpponentId);
   const aimTargets = game.opponents.filter(
     (opponent) => opponent.alive && opponent.insight.possibleCount < FREQUENCY_COUNT,
   );
+  const summary = describePreparation(slots, selectedDiscardSlots, tuningSlot, tuningOffset);
 
-  function handleSlotClick(slotIndex: number) {
-    if (mode === "discard") {
-      if (slotIndex === tuningSlot) {
-        preparation.setTuningSlot(null);
-      }
+  function toggleDiscard(slotIndex: number) {
+    if (slotIndex === tuningSlot) {
+      preparation.setTuningSlot(null);
+      preparation.setTuningOffset(0);
+    }
 
-      preparation.toggleDiscardSlot(slotIndex);
+    preparation.toggleDiscardSlot(slotIndex);
+  }
+
+  // Only one Mado can be tuned per round, so tuning a new one moves the tuning there.
+  function tuneActive(offset: number) {
+    if (activeSlot === null) {
       return;
     }
 
-    preparation.setTuningSlot(slotIndex);
-    preparation.setTuningOffset(0);
+    preparation.setTuningSlot(offset === 0 ? null : activeSlot);
+    preparation.setTuningOffset(offset);
   }
 
   return (
@@ -742,24 +764,11 @@ function PreparePanel({
       <div className="phase-heading">
         <h2>Prepare Mados</h2>
         <p>
-          Discard Mados to get new ones next round, and tune one Mado up to {MADO_TUNE_RANGE}°
-          toward a shield you have tracked.
+          Tap a Mado to discard it or tune it. Discarded Mados are replaced next round, and one Mado
+          can be tuned up to {MADO_TUNE_RANGE}° toward a shield you have tracked.
         </p>
       </div>
       <div className="prepare-toolbar">
-        <div className="mode-switch" role="group" aria-label="Preparation mode">
-          {(["discard", "tune"] as const).map((option) => (
-            <button
-              aria-pressed={mode === option}
-              disabled={hasSubmitted}
-              key={option}
-              onClick={() => preparation.setMode(option)}
-              type="button"
-            >
-              {option === "discard" ? "Discard" : "Tune"}
-            </button>
-          ))}
-        </div>
         <label className="aim-select">
           Show known shield
           <select
@@ -777,44 +786,70 @@ function PreparePanel({
         </label>
       </div>
       <MadoSlotGrid
+        activeSlotIndex={hasSubmitted ? null : activeSlot}
         disabled={hasSubmitted}
-        disabledSlotIndexes={mode === "tune" ? selectedDiscardSlots : []}
+        discardSlotIndexes={selectedDiscardSlots}
         frequencyOverrides={
           tuningSlot !== null && tunedFrequency !== null ? { [tuningSlot]: tunedFrequency } : {}
         }
-        onSlotClick={handleSlotClick}
+        onSlotClick={(slotIndex) => preparation.setActiveSlot(slotIndex)}
         overlayArcs={aimArcs}
-        selectedSlotIndexes={
-          mode === "discard" ? selectedDiscardSlots : tuningSlot === null ? [] : [tuningSlot]
-        }
-        selectionTone={mode === "tune" ? "tune" : undefined}
         slots={slots}
+        tunedSlotIndex={tunedFrequency !== null ? tuningSlot : null}
       />
-      {mode === "tune" && tunedMado && tunedFrequency !== null && !hasSubmitted ? (
-        <div className="tune-panel">
+      {summary ? <p className="prepare-summary">{summary}.</p> : null}
+      {activeMado && activeSlot !== null && !hasSubmitted ? (
+        <div className="tune-panel mado-detail">
           <FrequencyWheel
             arcs={aimArcs}
-            ghostMarker={tunedMado.frequency}
-            label={`Mado ${tuningSlot! + 1} tuned to ${tunedFrequency} degrees`}
-            marker={tunedFrequency}
+            ghostMarker={activeOffset !== 0 ? activeMado.frequency : undefined}
+            label={`Mado ${activeSlot + 1}`}
+            marker={normalizeFrequency(activeMado.frequency + activeOffset)}
             size="large"
           />
-          <label className="tune-slider">
-            <span>
-              Mado {tuningSlot! + 1}: {Math.round(tunedMado.frequency)}° → {tunedFrequency}°
-            </span>
-            <input
-              max={MADO_TUNE_RANGE}
-              min={-MADO_TUNE_RANGE}
-              onChange={(event) => preparation.setTuningOffset(Number(event.target.value))}
-              step={1}
-              type="range"
-              value={tuningOffset}
-            />
-          </label>
+          <div className="tune-slider">
+            <strong>
+              Mado {activeSlot + 1}: {Math.round(activeMado.frequency)}°
+              {activeOffset !== 0
+                ? ` → ${normalizeFrequency(activeMado.frequency + activeOffset)}°`
+                : ""}
+            </strong>
+            {activeDiscarded ? (
+              <small>Discarded. A new Mado fills this slot next round.</small>
+            ) : (
+              <label>
+                <span>Tune</span>
+                <input
+                  max={MADO_TUNE_RANGE}
+                  min={-MADO_TUNE_RANGE}
+                  onChange={(event) => tuneActive(Number(event.target.value))}
+                  step={1}
+                  type="range"
+                  value={activeOffset}
+                />
+              </label>
+            )}
+            {!activeDiscarded && tunedFrequency !== null && tuningSlot !== activeSlot ? (
+              <small>
+                Mado {tuningSlot! + 1} is already tuned. Tuning this one moves the tuning here.
+              </small>
+            ) : null}
+            <div className="detail-actions">
+              <button
+                aria-pressed={activeDiscarded}
+                onClick={() => toggleDiscard(activeSlot)}
+                type="button"
+              >
+                {activeDiscarded ? "Keep" : "Discard"}
+              </button>
+              {activeOffset !== 0 ? (
+                <button onClick={() => tuneActive(0)} type="button">
+                  Reset tuning
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
-      ) : mode === "tune" && !hasSubmitted ? (
-        <p className="waiting-copy">Pick the Mado you want to tune.</p>
       ) : null}
       <button
         className="primary-button action-button"
@@ -1396,7 +1431,7 @@ export function App() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [selectedDiscardSlots, setSelectedDiscardSlots] = useState<number[]>([]);
-  const [prepareMode, setPrepareMode] = useState<PrepareMode>("discard");
+  const [activePrepareSlot, setActivePrepareSlot] = useState<number | null>(null);
   const [tuningSlot, setTuningSlot] = useState<number | null>(null);
   const [tuningOffset, setTuningOffset] = useState(0);
   const [aimOpponentId, setAimOpponentId] = useState("");
@@ -1575,7 +1610,7 @@ export function App() {
         if (result.ok) {
           setGame(result.game);
           setSelectedDiscardSlots([]);
-          setPrepareMode("discard");
+          setActivePrepareSlot(null);
           setTuningSlot(null);
           setTuningOffset(0);
           return;
@@ -1769,8 +1804,8 @@ export function App() {
                 totalBattleDamageTaken={totalBattleDamageTaken}
                 mustChooseBattleAction={mustChooseBattleAction}
                 preparation={{
-                  mode: prepareMode,
-                  setMode: setPrepareMode,
+                  activeSlot: activePrepareSlot,
+                  setActiveSlot: setActivePrepareSlot,
                   selectedDiscardSlots,
                   toggleDiscardSlot,
                   tuningSlot,
