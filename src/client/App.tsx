@@ -514,14 +514,6 @@ function GameHud({ game }: { game: GameSnapshot }) {
         </div>
       </div>
       <div className="hud-cell">
-        <Shield size={18} aria-hidden="true" />
-        <span>Shield</span>
-        <FrequencyWheel
-          label="Your shield frequency"
-          marker={game.currentPlayer.shieldFrequency}
-        />
-      </div>
-      <div className="hud-cell">
         <Radio size={18} aria-hidden="true" />
         <span>Mados</span>
         <strong>
@@ -590,7 +582,9 @@ function PlayerStatusPanel({ game }: { game: GameSnapshot }) {
               }
               className="mini-mado"
               data-empty={mado === null}
+              data-frequency={mado ? `${Math.round(mado.frequency)}°` : undefined}
               key={mado?.id ?? `mini-${index}`}
+              tabIndex={mado ? 0 : undefined}
               style={mado ? frequencyMarkerStyle(mado.frequency) : undefined}
             >
               {index + 1}
@@ -615,6 +609,7 @@ function MadoSlotGrid({
   selectedSlotIndexes = [],
   selectionTone,
   slots,
+  usedSlotIndexes = [],
 }: {
   disabled?: boolean;
   disabledSlotIndexes?: number[];
@@ -624,6 +619,7 @@ function MadoSlotGrid({
   selectedSlotIndexes?: number[];
   selectionTone?: "tune";
   slots: Array<Mado | null>;
+  usedSlotIndexes?: number[];
 }) {
   return (
     <div className="mado-grid" data-tone={selectionTone}>
@@ -635,7 +631,9 @@ function MadoSlotGrid({
           <button
             className="mado-button"
             data-selected={selectedSlotIndexes.includes(index)}
+            data-used={usedSlotIndexes.includes(index)}
             disabled={isDisabled}
+            title={frequency !== undefined ? `Mado ${index + 1}: ${Math.round(frequency)}°` : undefined}
             key={mado?.id ?? `empty-${index}`}
             onClick={() => {
               if (mado) {
@@ -1030,6 +1028,7 @@ function PrimaryPhasePanel({
                 </p>
                 <MadoSlotGrid
                   disabledSlotIndexes={currentBattle.usedMadoSlotIndexes}
+                  usedSlotIndexes={currentBattle.usedMadoSlotIndexes}
                   overlayArcs={knownArcs(game, currentBattle.opponentId)}
                   onSlotClick={(index, mado) =>
                     submitBattleAction({
@@ -1121,6 +1120,18 @@ function PrimaryPhasePanel({
   );
 }
 
+// "95°-130°, 200°-215°". Arc ends are exclusive and may run past 360.
+function formatArcs(arcs: FrequencyArc[]) {
+  return arcs
+    .map((arc) => {
+      const first = normalizeFrequency(arc.start);
+      const last = normalizeFrequency(arc.end - 1);
+
+      return first === last ? `${first}°` : `${first}°-${last}°`;
+    })
+    .join(", ");
+}
+
 function describePossibleRange(possibleCount: number) {
   return possibleCount >= FREQUENCY_COUNT
     ? "shield unknown"
@@ -1159,6 +1170,9 @@ function OpponentsPanel({ game }: { game: GameSnapshot }) {
               arcs={opponent.insight.arcs}
               label={`Known shield range for ${opponent.name}`}
             />
+            {opponent.insight.possibleCount < FREQUENCY_COUNT ? (
+              <small className="range-copy">{formatArcs(opponent.insight.arcs)}</small>
+            ) : null}
             <small className="insight-copy">
               {describePossibleRange(opponent.insight.possibleCount)}
               {opponent.insight.lastNarrowedRound !== null
