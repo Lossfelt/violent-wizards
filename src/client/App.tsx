@@ -52,6 +52,17 @@ const ROUND_PHASES = [
   { status: "round_cleanup", label: "Cleanup" },
 ] as const;
 
+// crypto.randomUUID only exists in secure contexts (https or localhost). Phones that join a
+// local game over the network open plain http, so fall back to getRandomValues there.
+function createSessionId() {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function getSessionId() {
   const existingSessionId = window.localStorage.getItem(SESSION_STORAGE_KEY);
 
@@ -59,7 +70,7 @@ function getSessionId() {
     return existingSessionId;
   }
 
-  const sessionId = crypto.randomUUID();
+  const sessionId = createSessionId();
   window.localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
   return sessionId;
 }
