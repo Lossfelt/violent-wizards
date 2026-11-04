@@ -479,6 +479,10 @@ export function resolveScriptedBattle(
       [playerA.id]: null,
       [playerB.id]: null,
     };
+    const firedFrequencyByPlayerId: Record<string, number | null> = {
+      [playerA.id]: null,
+      [playerB.id]: null,
+    };
     const usedThisExchange: Record<string, number[]> = {
       [playerA.id]: [],
       [playerB.id]: [],
@@ -499,6 +503,7 @@ export function resolveScriptedBattle(
       const hit = resolveMadoHit(mado.frequency, defender.shieldFrequency, fleeMultiplier);
       damageByPlayerId[defender.id] = hit.damage;
       echoByAttackerId[attacker.id] = hit.echo;
+      firedFrequencyByPlayerId[attacker.id] = mado.frequency;
       usedSlotsByPlayerId[attacker.id]!.add(action.madoSlotIndex);
       usedThisExchange[attacker.id]!.push(action.madoSlotIndex);
     }
@@ -514,6 +519,7 @@ export function resolveScriptedBattle(
       },
       damageByPlayerId,
       echoByAttackerId,
+      firedFrequencyByPlayerId,
       fleeingPlayerIdsAfterExchange: [...fleeingPlayerIds],
       usedMadoSlotIndexesByPlayerId: usedThisExchange,
     });

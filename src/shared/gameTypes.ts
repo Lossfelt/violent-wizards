@@ -71,6 +71,8 @@ export type Exchange = {
   actionsByPlayerId: Record<string, ExchangeAction>;
   damageByPlayerId: Record<string, number>;
   echoByAttackerId: Record<string, EchoBand | null>;
+  // Frequency of the Mado each player fired, kept because spent slots are emptied later.
+  firedFrequencyByPlayerId: Record<string, number | null>;
   fleeingPlayerIdsAfterExchange: string[];
   usedMadoSlotIndexesByPlayerId: Record<string, number[]>;
 };

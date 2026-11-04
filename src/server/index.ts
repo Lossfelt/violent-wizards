@@ -200,27 +200,24 @@ function createCurrentBattleSnapshot(
       ...(battle.usedMadoSlotIndexesByPlayerId[currentPlayerId] ?? new Set<number>()),
     ],
     totalDamageTaken,
-    lastExchange: lastExchange
-      ? createLastExchangeSnapshot(game, lastExchange, currentPlayerId)
-      : null,
+    lastExchange: lastExchange ? createLastExchangeSnapshot(lastExchange, currentPlayerId) : null,
+    shots: battle.exchanges.flatMap((exchange) => {
+      const echo = exchange.echoByAttackerId[currentPlayerId];
+      const frequency = exchange.firedFrequencyByPlayerId[currentPlayerId];
+      return echo && frequency != null ? [{ frequency, echo }] : [];
+    }),
   };
 }
 
 function createLastExchangeSnapshot(
-  game: LobbyGame,
   exchange: Exchange,
   currentPlayerId: string,
 ): LastExchangeSnapshot {
-  const action = exchange.actionsByPlayerId[currentPlayerId];
-  const player = game.gamePlayersById.get(currentPlayerId);
-  const firedMado =
-    action?.type === "mado" ? player?.madoSlots[action.madoSlotIndex] ?? null : null;
-
   return {
     index: exchange.index,
     damageTaken: exchange.damageByPlayerId[currentPlayerId] ?? 0,
     echo: exchange.echoByAttackerId[currentPlayerId] ?? null,
-    firedFrequency: firedMado?.frequency ?? null,
+    firedFrequency: exchange.firedFrequencyByPlayerId[currentPlayerId] ?? null,
   };
 }
 
@@ -665,6 +662,10 @@ function resolveReadyBattleExchange(game: LobbyGame, battle: ActiveBattle) {
     [playerA.id]: null,
     [playerB.id]: null,
   };
+  const firedFrequencyByPlayerId: Exchange["firedFrequencyByPlayerId"] = {
+    [playerA.id]: null,
+    [playerB.id]: null,
+  };
   const usedThisExchange: Record<string, number[]> = {
     [playerA.id]: [],
     [playerB.id]: [],
@@ -686,6 +687,7 @@ function resolveReadyBattleExchange(game: LobbyGame, battle: ActiveBattle) {
 
     damageByPlayerId[defender.id] = hit.damage;
     echoByAttackerId[attacker.id] = hit.echo;
+    firedFrequencyByPlayerId[attacker.id] = mado.frequency;
     attacker.insightsByTarget[defender.id] = applyEcho(
       attacker.insightsByTarget[defender.id],
       mado.frequency,
@@ -707,6 +709,7 @@ function resolveReadyBattleExchange(game: LobbyGame, battle: ActiveBattle) {
     },
     damageByPlayerId,
     echoByAttackerId,
+    firedFrequencyByPlayerId,
     fleeingPlayerIdsAfterExchange: [...battle.fleeingPlayerIds],
     usedMadoSlotIndexesByPlayerId: usedThisExchange,
   });

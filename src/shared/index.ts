@@ -150,6 +150,8 @@ export type CurrentBattleSnapshot = RoundBattlePreview & {
   usedMadoSlotIndexes: number[];
   totalDamageTaken: number;
   lastExchange: LastExchangeSnapshot | null;
+  // Your own shots in this battle, oldest first, so the dial can mark every echo.
+  shots: Array<{ frequency: number; echo: EchoBand }>;
 };
 
 export type LastExchangeSnapshot = {
