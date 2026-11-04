@@ -26,8 +26,8 @@ Spillreglene fra `feat/ekkolodd-og-drift` vist i den gamle layouten, rett før s
 
 ## 03 til 05: prototyper
 
-Prototypen lå på `?prototype` på grenen `prototype/ui-skiven`. Beslutningene står i
-`src/client/prototype/NOTES.md` i den grenens historikk.
+Prototypen lå på `?prototype` på grenen `prototype/ui-skiven`. Spørsmålene og beslutningene
+fra hver runde står i [prototype-notes.md](prototype-notes.md).
 
 | Fil | Viser |
 | --- | --- |

@@ -1,6 +1,7 @@
 # UI prototype notes
 
-Question: what should the game screen look like? Prototype lives at `?prototype` (dev only).
+Question: what should the game screen look like? The prototype lived at `?prototype` (dev only)
+on the branch `prototype/ui-skiven` and was removed once A3 was built into the app.
 
 ## Round 1 (2026-11-04)
 
