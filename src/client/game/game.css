@@ -235,6 +235,18 @@
 .sheet-summary { margin: 0; color: var(--teal); font-size: 0.85rem; font-weight: 800; }
 .sheet-battle span { font-size: 0.95rem; }
 .sheet-echo { font-weight: 900; text-transform: uppercase; }
+.sheet-incoming { margin: -4px 0 0; color: var(--muted); font-size: 0.85rem; }
+.sheet-incoming span + span::before { content: " · "; color: var(--faint); font-weight: 400; }
+.sheet-incoming span[data-hit="true"] { color: #f6a39b; font-weight: 800; }
+.sheet-incoming span[data-latest="true"] { text-decoration: underline; text-underline-offset: 3px; }
+
+/* The hit points flash when a shot lands. The key changes per exchange to restart it. */
+.game-hp b[data-hit="true"] { display: inline-block; animation: hp-hit 900ms ease-out; }
+
+@keyframes hp-hit {
+  0% { color: #fff; transform: scale(1.5); text-shadow: 0 0 12px #f06e63; }
+  100% { transform: scale(1); }
+}
 .sheet-share { display: grid; gap: 8px; }
 
 .game-screen .sheet-primary {

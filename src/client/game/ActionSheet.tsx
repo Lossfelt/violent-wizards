@@ -33,19 +33,32 @@ function plural(count: number, word: string) {
 function BattleSummary({ game }: { game: GameSnapshot }) {
   const battle = game.currentBattle;
   if (!battle) return null;
-  const echo = battle.lastExchange?.echo ?? null;
+  const last = battle.lastExchange;
+  const echo = last?.echo ?? null;
 
   return (
-    <div className="sheet-row sheet-battle">
-      <span>
-        vs <b>{battle.opponentName}</b> · you took <b>{Math.ceil(battle.totalDamageTaken)}</b>
-      </span>
-      {echo ? (
-        <span className="sheet-echo" style={{ color: ECHO_COLOR[echo] }}>
-          {echo}
+    <>
+      <div className="sheet-row sheet-battle">
+        <span>
+          vs <b>{battle.opponentName}</b> · you took <b>{Math.ceil(battle.totalDamageTaken)}</b>
         </span>
+        {echo ? (
+          <span className="sheet-echo" style={{ color: ECHO_COLOR[echo] }}>
+            {echo}
+          </span>
+        ) : null}
+      </div>
+      {battle.shotsTaken.length > 0 ? (
+        <p className="sheet-incoming">
+          Their shots:{" "}
+          {battle.shotsTaken.map((damage, index) => (
+            <span data-hit={damage > 0} data-latest={index === battle.shotsTaken.length - 1} key={index}>
+              {damage > 0 ? Math.ceil(damage) : "miss"}
+            </span>
+          ))}
+        </p>
       ) : null}
-    </div>
+    </>
   );
 }
 

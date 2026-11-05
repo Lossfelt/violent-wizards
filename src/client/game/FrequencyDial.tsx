@@ -220,7 +220,8 @@ export function FrequencyDial({
           })()
         : null}
 
-      <foreignObject height="104" width="150" x={C - 75} y={C - 52}>
+      {/* The text box is wider than the inner orbit's gap, so it must not swallow taps on Mados. */}
+      <foreignObject height="104" pointerEvents="none" width="150" x={C - 75} y={C - 52}>
         <div className="dial-center">{center}</div>
       </foreignObject>
     </svg>

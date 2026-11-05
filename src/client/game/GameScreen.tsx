@@ -82,6 +82,11 @@ export function GameScreen({ game, actions, error, connected, onOpenRules }: Pro
     }
   }, [game.receivedInsights, game.opponents, me.id]);
 
+  // The hit points flash once for every shot that lands, also the ones that hit you as you flee.
+  const lastExchange = battle?.lastExchange ?? null;
+  const hitKey =
+    battle && lastExchange && lastExchange.damageTaken > 0 ? `${battle.id}-${lastExchange.index}` : null;
+
   const focusCandidate = lockedId ?? focusId;
   const focus =
     game.opponents.find((opponent) => opponent.id === focusCandidate && opponent.alive) ?? null;
@@ -195,7 +200,10 @@ export function GameScreen({ game, actions, error, connected, onOpenRules }: Pro
           ))}
         </ol>
         <span className="game-hp">
-          <b>{Math.max(0, Math.ceil(me.health))}</b>hp
+          <b data-hit={hitKey !== null} key={hitKey ?? "steady"}>
+            {Math.max(0, Math.ceil(me.health))}
+          </b>
+          hp
         </span>
       </div>
 

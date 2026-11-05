@@ -273,6 +273,11 @@ function createCurrentBattleSnapshot(
       const frequency = exchange.firedFrequencyByPlayerId[currentPlayerId];
       return echo && frequency != null ? [{ frequency, echo }] : [];
     }),
+    shotsTaken: battle.exchanges.flatMap((exchange) =>
+      exchange.firedFrequencyByPlayerId[opponentId] != null
+        ? [exchange.damageByPlayerId[currentPlayerId] ?? 0]
+        : [],
+    ),
   };
 }
 

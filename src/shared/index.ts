@@ -159,6 +159,8 @@ export type CurrentBattleSnapshot = RoundBattlePreview & {
   lastExchange: LastExchangeSnapshot | null;
   // Your own shots in this battle, oldest first, so the dial can mark every echo.
   shots: Array<{ frequency: number; echo: EchoBand }>;
+  // Damage from each shot the opponent fired at you, oldest first. 0 is a miss.
+  shotsTaken: number[];
 };
 
 export type LastExchangeSnapshot = {
