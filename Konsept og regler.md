@@ -60,6 +60,10 @@ Hver spiller sin helse starter på 200 poeng. Spillernes helse er skjult for hve
 
    * På fest kan lobbyen i stedet ligge på en felles skjerm (bordskjerm), for eksempel en TV. Verten skriver en kort beskjed som vises der, for eksempel når spillet starter, og gjestene melder seg på fra telefonen. Bordskjermen er ingen spiller. Den starter spillet og viser deretter det alle trollmenn kan sanse: fase, hvem som er ferdige, hvem som slåss, rotasjoner og hvem som har falt. Helse og frekvenser vises aldri der. Neste runde starter av seg selv etter en kort nedtelling.
 
+   * Verten (eller bordskjermen) velger tid per runde før spillet starter: 2, 3, 5 eller 8 minutter, med 5 som standard. Planleggingen (forberedelse og erklæring) må være ferdig innen 40 % av rundetiden, og kampene innen rundetiden er ute. Tid som spares i planleggingen går til kampene. Hver spiller forbereder og erklærer i sitt eget tempo, så den som er ferdig med forberedelsen går rett videre til erklæringen.
+
+   * Ordre ved fravær: den som ikke har handlet innen en frist følger standardordre resten av runden. Man beholder alle Mados, holder seg skjult, og hvis man blir angrepet skyter man den første ledige Madoen og flykter deretter så fort som mulig. Slik kan ikke én gjest som er gått for å hente drikke stoppe hele spillet.
+
 2. Hver runde består av følgende sekvenser:
    
    1. Hver spiller har fem Mado-slots. Ved starten av hver runde fylles alle tomme slots automatisk med nye Mados. Mados som ikke ble brukt i forrige runde blir liggende.

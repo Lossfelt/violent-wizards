@@ -65,12 +65,22 @@ function BattleSummary({ game }: { game: GameSnapshot }) {
 function RoundBreak({ game }: { game: GameSnapshot }) {
   const seconds = useCountdown(game.nextRoundInMs);
 
-  if (seconds !== null) {
-    return <p className="sheet-hint">Round over. The next round starts in {seconds} s.</p>;
-  }
+  return seconds === null ? (
+    <p className="sheet-hint">Round over.</p>
+  ) : (
+    <p className="sheet-hint">Round over. The next round starts in {seconds} s.</p>
+  );
+}
 
-  return game.hostPlayerId === game.currentPlayer.id ? null : (
-    <p className="sheet-hint">Round over. Waiting for the host to start the next one.</p>
+// Said once you have missed a deadline, so the automatic choices do not come as a surprise.
+function StandingOrdersNote({ game }: { game: GameSnapshot }) {
+  if (!game.standingOrderPlayerIds.includes(game.currentPlayer.id)) return null;
+
+  return (
+    <p className="sheet-orders">
+      Time ran out, so standing orders took over this round: keep every Mado, stay hidden, and
+      if attacked fire the first free Mado and flee.
+    </p>
   );
 }
 
@@ -195,6 +205,15 @@ function PhaseContent(props: Props) {
   }
 
   if (game.status === "battle_resolution") {
+    if (game.standingOrderPlayerIds.includes(me.id) && battle?.status !== "finished") {
+      return (
+        <>
+          {battle ? <BattleSummary game={game} /> : null}
+          <StandingOrdersNote game={game} />
+        </>
+      );
+    }
+
     if (!battle) {
       return <p className="sheet-hint">You are not fighting this round. Watch the table.</p>;
     }
@@ -243,12 +262,13 @@ function PhaseContent(props: Props) {
   return (
     <>
       <BattleSummary game={game} />
+      <StandingOrdersNote game={game} />
+      <RoundBreak game={game} />
       {game.hostPlayerId === me.id && !game.tableHosted ? (
-        <button className="sheet-primary" onClick={props.onNextRound} type="button">
-          Start next round
+        <button className="sheet-quiet" onClick={props.onNextRound} type="button">
+          Start the next round now
         </button>
       ) : null}
-      <RoundBreak game={game} />
     </>
   );
 }

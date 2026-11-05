@@ -14,6 +14,7 @@ import type {
 import { MADO_TUNE_RANGE, SHIELD_DRIFT_MAX, SHIELD_ROTATION_RANGE } from "../shared";
 import { GameScreen, type GameActions } from "./game/GameScreen";
 import { TableScreen } from "./table/TableScreen";
+import { RoundTimePicker } from "./RoundTimePicker";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 
@@ -139,8 +140,14 @@ function RulesModal({ onClose }: { onClose: () => void }) {
               </li>
               <li>Declare: attack one living opponent, stay hidden, or rotate your shield.</li>
               <li>Warfare: matched opponents resolve simultaneous exchanges.</li>
-              <li>Afterwards spent Mados are removed, dead players fall, and the host starts the next round.</li>
+              <li>Afterwards spent Mados are removed, dead players fall, and the next round starts after a short break.</li>
             </ol>
+            <p>
+              You prepare and declare at your own pace. Every round has a time limit: planning
+              must be done within the first 40% of it, battles by the end. Miss a deadline and
+              standing orders take over for the rest of the round: keep every Mado, stay hidden,
+              and if attacked fire the first free Mado and flee.
+            </p>
           </section>
           <section className="rules-section">
             <h3>Battle rules</h3>
@@ -239,6 +246,7 @@ function LobbyPanel({
   qrCodeUrl,
   setJoinCode,
   setPlayerName,
+  setRoundMinutes,
   startGame,
   gameError,
 }: {
@@ -257,6 +265,7 @@ function LobbyPanel({
   qrCodeUrl: string | null;
   setJoinCode: (value: string) => void;
   setPlayerName: (value: string) => void;
+  setRoundMinutes: (minutes: number) => void;
   startGame: () => void;
   gameError: string | null;
 }) {
@@ -348,6 +357,7 @@ function LobbyPanel({
           </div>
         ))}
       </div>
+      <RoundTimePicker minutes={lobby.roundMinutes} onChange={isLobbyHost ? setRoundMinutes : undefined} />
       {isLobbyHost ? (
         <button
           className="primary-button"
@@ -515,6 +525,8 @@ export function App() {
         socket.emit("table:message", { message }, (result) => resolve(handleTableResult(result))),
       ),
     start: () => socket.emit("table:start", handleTableResult),
+    setRoundMinutes: (minutes: number) =>
+      socket.emit("table:roundMinutes", { minutes }, handleTableResult),
   };
 
   function createLobby() {
@@ -563,6 +575,16 @@ export function App() {
         }
       },
     );
+  }
+
+  function setRoundMinutes(minutes: number) {
+    socket.emit("lobby:roundMinutes", { minutes }, (result) => {
+      if (result.ok && "lobby" in result) {
+        setLobby(result.lobby);
+      } else if (!result.ok) {
+        setGameError(result.error);
+      }
+    });
   }
 
   function startGame() {
@@ -648,6 +670,7 @@ export function App() {
           onNewGame={createTable}
           onOpenRules={() => setIsRulesOpen(true)}
           onSaveMessage={tableActions.saveMessage}
+          onSetRoundMinutes={tableActions.setRoundMinutes}
           onStart={tableActions.start}
           qrCodeUrl={qrCodeUrl}
           table={table}
@@ -694,6 +717,7 @@ export function App() {
             qrCodeUrl={qrCodeUrl}
             setJoinCode={setJoinCode}
             setPlayerName={setPlayerName}
+            setRoundMinutes={setRoundMinutes}
             startGame={startGame}
           />
         </section>

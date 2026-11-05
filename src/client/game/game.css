@@ -70,7 +70,7 @@
 
 .game-steps {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   gap: 10px;
   align-items: center;
   margin-top: 8px;
@@ -97,6 +97,26 @@
 .game-steps li { padding: 4px 8px; border-radius: 999px; color: var(--faint); }
 .game-steps li[data-on="true"] { color: #171009; background: var(--gold-2); }
 .game-hp { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+
+.game-clock {
+  color: var(--gold-2);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.game-clock[data-urgent="true"] { color: #f06e63; }
+.game-clock-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+.sheet-orders {
+  margin: 0;
+  border-left: 3px solid var(--gold);
+  padding: 4px 0 4px 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
 .game-hp b { margin-right: 2px; color: #f6a39b; font-size: 1.3rem; }
 
 /* Opponent chips and the small table */

@@ -785,3 +785,45 @@ h1 {
   font: 400 1.15rem / 1.4 Georgia, serif;
   white-space: pre-wrap;
 }
+
+/* Round time: chosen by the host in the lobby or on the table screen. */
+
+.round-time {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.round-time legend {
+  margin-bottom: 8px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.round-time div { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+
+.round-time button {
+  min-height: 40px;
+  border: 1px solid var(--border-muted);
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--surface-2);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.round-time button[aria-pressed="true"] {
+  border-color: var(--gold-2);
+  color: #171009;
+  background: var(--gold-2);
+}
+
+.round-time small { color: var(--faint); font-size: 0.78rem; line-height: 1.4; }
+.round-time-note { margin: 0; color: var(--muted); font-size: 0.9rem; }

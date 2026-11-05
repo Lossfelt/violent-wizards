@@ -27,10 +27,13 @@ import type {
   TableSnapshot,
 } from "../shared/index.js";
 import {
+  DEFAULT_ROUND_MINUTES,
+  ROUND_BREAK_MS,
   SHIELD_DRIFT_MAX,
   SHIELD_ROTATION_RANGE,
   STARTING_HEALTH,
   applyEcho,
+  clampRoundMinutes,
   clampShieldRotation,
   createInitialInsight,
   dilateInsight,
@@ -45,6 +48,7 @@ import {
   removeDeadPlayerInsights,
   resolveAttackDeclarations,
   resolveMadoHit,
+  roundDeadlines,
   toFrequencyArcs,
   tuneMado,
 } from "../shared/index.js";
@@ -102,6 +106,12 @@ type LobbyGame = {
   draw: boolean;
   battleHistory: PublicBattleHistoryEntry[];
   shieldRotations: PublicShieldRotation[];
+  roundMinutes: number;
+  planningEndsAt: number | null;
+  roundEndsAt: number | null;
+  // Past the end of the round: every battle decision left is made by standing orders.
+  overtime: boolean;
+  standingOrderPlayerIds: Set<string>;
 };
 
 type GameSocket = Socket<
@@ -146,6 +156,7 @@ function createLobbySnapshot(game: LobbyGame, currentPlayerId: string): LobbySna
     hostPlayerId: game.hostPlayerId,
     tableHosted: isTableHosted(game),
     message: game.message,
+    roundMinutes: game.roundMinutes,
     currentPlayerId,
     players: [...game.playersById.values()],
   };
@@ -163,9 +174,22 @@ function nextRoundInMs(game: LobbyGame) {
   return game.nextRoundAt === null ? null : Math.max(0, game.nextRoundAt - Date.now());
 }
 
+function isPlanning(game: LobbyGame) {
+  return game.status === "round_prepare" || game.status === "attack_declaration";
+}
+
+function phaseEndsInMs(game: LobbyGame) {
+  const deadline = isPlanning(game)
+    ? game.planningEndsAt
+    : game.status === "battle_resolution"
+      ? game.roundEndsAt
+      : null;
+  return deadline === null ? null : Math.max(0, deadline - Date.now());
+}
+
+// Each wizard prepares and declares at their own pace, so planning is done once declared.
 function isReadyForPhase(game: LobbyGame, playerId: string) {
-  if (game.status === "round_prepare") return game.discardSubmittedPlayerIds.has(playerId);
-  if (game.status === "attack_declaration") return game.attackSubmittedPlayerIds.has(playerId);
+  if (isPlanning(game)) return game.attackSubmittedPlayerIds.has(playerId);
   if (game.status === "battle_resolution") {
     return ![...game.activeBattlesById.values()].some(
       (battle) =>
@@ -193,6 +217,7 @@ function createTableSnapshot(game: LobbyGame): TableSnapshot {
         connected: lobbyPlayer.connected,
         alive,
         ready: alive && isReadyForPhase(game, lobbyPlayer.id),
+        standingOrders: game.standingOrderPlayerIds.has(lobbyPlayer.id),
       };
     }),
     battles: showBattles
@@ -207,6 +232,8 @@ function createTableSnapshot(game: LobbyGame): TableSnapshot {
     winnerPlayerId: game.winnerPlayerId,
     draw: game.draw,
     nextRoundInMs: nextRoundInMs(game),
+    roundMinutes: game.roundMinutes,
+    phaseEndsInMs: phaseEndsInMs(game),
   };
 }
 
@@ -317,6 +344,9 @@ function createGameSnapshot(game: LobbyGame, currentPlayerId: string): GameSnaps
     hostPlayerId: game.hostPlayerId,
     tableHosted: isTableHosted(game),
     nextRoundInMs: nextRoundInMs(game),
+    roundMinutes: game.roundMinutes,
+    phaseEndsInMs: phaseEndsInMs(game),
+    standingOrderPlayerIds: [...game.standingOrderPlayerIds],
     currentPlayer: {
       id: currentPlayer.id,
       name: currentPlayer.name,
@@ -437,6 +467,11 @@ function createGameForPlayer(
     draw: false,
     battleHistory: [],
     shieldRotations: [],
+    roundMinutes: DEFAULT_ROUND_MINUTES,
+    planningEndsAt: null,
+    roundEndsAt: null,
+    overtime: false,
+    standingOrderPlayerIds: new Set(),
   };
 
   gamesByCode.set(code, game);
@@ -577,6 +612,7 @@ function beginGame(game: LobbyGame) {
   game.draw = false;
   game.battleHistory = [];
   game.shieldRotations = [];
+  startRoundClock(game);
 
   for (const player of game.gamePlayersById.values()) {
     player.insightsByTarget = Object.fromEntries(
@@ -848,7 +884,7 @@ function startNextRound(socket: GameSocket): GameActionResult {
 }
 
 function advanceRound(game: LobbyGame) {
-  clearRoundTimer(game);
+  clearGameTimer(game);
   game.roundNumber += 1;
   game.status = "round_prepare";
   driftShields(game);
@@ -870,6 +906,7 @@ function advanceRound(game: LobbyGame) {
     player.attackIntent = undefined;
   }
 
+  startRoundClock(game);
   emitGameUpdate(game);
 }
 
@@ -912,6 +949,7 @@ function commitFinishedRoundIfReady(game: LobbyGame) {
   game.winnerPlayerId = livingIds.length === 1 ? livingIds[0]! : null;
   game.draw = livingIds.length === 0;
   game.status = livingIds.length <= 1 ? "finished" : "round_cleanup";
+  clearGameTimer(game);
   scheduleNextRound(game);
 }
 
@@ -944,6 +982,7 @@ function submitBattleAction(
     payload.action,
   );
   resolveReadyBattleExchange(game, battle);
+  actOnStandingOrders(game);
   commitFinishedRoundIfReady(game);
   emitGameUpdate(game);
 
@@ -1114,8 +1153,10 @@ function submitAttack(
     return { ok: false, error: "No active game found." };
   }
 
-  if (game.status !== "attack_declaration") {
-    return { ok: false, error: "Attacking is not available in this phase." };
+  const prepared = game.discardSubmittedPlayerIds.has(playerId);
+
+  if (!isPlanning(game) || !prepared || game.attackSubmittedPlayerIds.has(playerId)) {
+    return { ok: false, error: "Attacking is not available right now." };
   }
 
   const player = game.gamePlayersById.get(playerId);
@@ -1145,60 +1186,184 @@ function submitAttack(
         ? { targetPlayerId: target.id }
         : { pass: true };
   game.attackSubmittedPlayerIds.add(playerId);
-
-  if (livingPlayerIds(game).every((id) => game.attackSubmittedPlayerIds.has(id))) {
-    const matchmaking = resolveAttackDeclarations([...game.gamePlayersById.values()]);
-    game.pendingBattles = matchmaking.battles;
-    game.activeBattlesById = new Map(
-      matchmaking.battles.map((battle) => [
-        battle.id,
-        createActiveBattle(game, battle),
-      ]),
-    );
-    game.unmatchedAttackerIds = matchmaking.unmatchedAttackerIds;
-    game.status = matchmaking.battles.length > 0 ? "battle_resolution" : "round_cleanup";
-
-    if (game.status === "round_cleanup") {
-      applyShieldRotations(game);
-      scheduleNextRound(game);
-    }
-  }
-
+  resolveDeclarationsIfReady(game);
   emitGameUpdate(game);
   return { ok: true, game: createGameSnapshot(game, playerId) };
 }
 
-// A table-hosted game has nobody at the screen between rounds, so rounds advance on a timer.
-const ROUND_BREAK_MS = 12_000;
-const MESSAGE_MAX_LENGTH = 280;
-const roundTimers = new Map<string, ReturnType<typeof setTimeout>>();
+function resolveDeclarationsIfReady(game: LobbyGame) {
+  if (!livingPlayerIds(game).every((id) => game.attackSubmittedPlayerIds.has(id))) {
+    return;
+  }
 
-function clearRoundTimer(game: LobbyGame) {
-  const timer = roundTimers.get(game.code);
+  const matchmaking = resolveAttackDeclarations([...game.gamePlayersById.values()]);
+  game.pendingBattles = matchmaking.battles;
+  game.activeBattlesById = new Map(
+    matchmaking.battles.map((battle) => [battle.id, createActiveBattle(game, battle)]),
+  );
+  game.unmatchedAttackerIds = matchmaking.unmatchedAttackerIds;
+  game.status = matchmaking.battles.length > 0 ? "battle_resolution" : "round_cleanup";
+
+  if (game.status === "round_cleanup") {
+    clearGameTimer(game);
+    applyShieldRotations(game);
+    scheduleNextRound(game);
+    return;
+  }
+
+  setGameTimer(game, game.roundEndsAt ?? Date.now(), () => endRoundOnStandingOrders(game));
+  actOnStandingOrders(game);
+  commitFinishedRoundIfReady(game);
+}
+
+const MESSAGE_MAX_LENGTH = 280;
+
+// One pending timer per game: the planning deadline, the end of the round, or the break.
+const gameTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function clearGameTimer(game: LobbyGame) {
+  const timer = gameTimers.get(game.code);
 
   if (timer) {
     clearTimeout(timer);
-    roundTimers.delete(game.code);
+    gameTimers.delete(game.code);
   }
 
   game.nextRoundAt = null;
 }
 
-function scheduleNextRound(game: LobbyGame) {
-  if (!isTableHosted(game) || game.status !== "round_cleanup") {
+function setGameTimer(game: LobbyGame, at: number, action: () => void) {
+  clearGameTimer(game);
+  gameTimers.set(
+    game.code,
+    setTimeout(() => {
+      gameTimers.delete(game.code);
+      action();
+    }, Math.max(0, at - Date.now())),
+  );
+}
+
+function startRoundClock(game: LobbyGame) {
+  const deadlines = roundDeadlines(Date.now(), game.roundMinutes);
+  game.planningEndsAt = deadlines.planningEndsAt;
+  game.roundEndsAt = deadlines.roundEndsAt;
+  game.overtime = false;
+  game.standingOrderPlayerIds = new Set();
+  setGameTimer(game, deadlines.planningEndsAt, () => endPlanningOnStandingOrders(game));
+}
+
+// Whoever has not planned in time keeps every Mado, stays hidden, and fights on standing
+// orders for the rest of the round.
+function endPlanningOnStandingOrders(game: LobbyGame) {
+  if (!isPlanning(game)) {
     return;
   }
 
-  clearRoundTimer(game);
-  game.nextRoundAt = Date.now() + ROUND_BREAK_MS;
-  roundTimers.set(
-    game.code,
-    setTimeout(() => {
-      if (game.status === "round_cleanup") {
-        advanceRound(game);
+  for (const playerId of livingPlayerIds(game)) {
+    if (game.attackSubmittedPlayerIds.has(playerId)) {
+      continue;
+    }
+
+    game.standingOrderPlayerIds.add(playerId);
+    game.discardSubmittedPlayerIds.add(playerId);
+    game.gamePlayersById.get(playerId)!.attackIntent = { pass: true };
+    game.attackSubmittedPlayerIds.add(playerId);
+  }
+
+  resolveDeclarationsIfReady(game);
+  emitGameUpdate(game);
+}
+
+function endRoundOnStandingOrders(game: LobbyGame) {
+  if (game.status !== "battle_resolution") {
+    return;
+  }
+
+  game.overtime = true;
+  actOnStandingOrders(game);
+  commitFinishedRoundIfReady(game);
+  emitGameUpdate(game);
+}
+
+// Standing orders in battle: fire the first free Mado when you must, otherwise flee.
+function actOnStandingOrders(game: LobbyGame) {
+  if (game.status !== "battle_resolution") {
+    return;
+  }
+
+  let progressed = true;
+
+  while (progressed) {
+    progressed = false;
+
+    for (const battle of game.activeBattlesById.values()) {
+      for (const playerId of [battle.playerAId, battle.playerBId]) {
+        const onOrders = game.overtime || game.standingOrderPlayerIds.has(playerId);
+
+        if (
+          battle.status !== "active" ||
+          !onOrders ||
+          battle.actionsByPlayerId[playerId] ||
+          battle.fleeingPlayerIds.has(playerId)
+        ) {
+          continue;
+        }
+
+        const player = game.gamePlayersById.get(playerId)!;
+        game.standingOrderPlayerIds.add(playerId);
+        battle.actionsByPlayerId[playerId] = normalizeBattleAction(battle, player, { type: "flee" });
+        progressed = true;
       }
-    }, ROUND_BREAK_MS),
-  );
+
+      if (battle.status === "active") {
+        const exchangesBefore = battle.exchanges.length;
+        resolveReadyBattleExchange(game, battle);
+        progressed ||= battle.exchanges.length !== exchangesBefore;
+      }
+    }
+  }
+}
+
+function scheduleNextRound(game: LobbyGame) {
+  if (game.status !== "round_cleanup") {
+    return;
+  }
+
+  const at = Date.now() + ROUND_BREAK_MS;
+  setGameTimer(game, at, () => {
+    if (game.status === "round_cleanup") {
+      advanceRound(game);
+    }
+  });
+  game.nextRoundAt = at;
+}
+
+function setRoundMinutes(game: LobbyGame, minutes: number) {
+  game.roundMinutes = clampRoundMinutes(minutes);
+  emitGameUpdate(game);
+}
+
+function setLobbyRoundMinutes(socket: GameSocket, payload: { minutes: number }): LobbyActionResult {
+  const game = getSocketGame(socket);
+  const playerId = socket.data.playerId;
+
+  if (!game || !playerId || game.status !== "lobby" || game.hostPlayerId !== playerId) {
+    return { ok: false, error: "Only the host can change the round time before the game starts." };
+  }
+
+  setRoundMinutes(game, payload.minutes);
+  return { ok: true, lobby: createLobbySnapshot(game, playerId) };
+}
+
+function setTableRoundMinutes(socket: GameSocket, payload: { minutes: number }): TableActionResult {
+  const game = getTableGame(socket);
+
+  if (!game || game.status !== "lobby") {
+    return { ok: false, error: "The round time can only be changed before the game starts." };
+  }
+
+  setRoundMinutes(game, payload.minutes);
+  return { ok: true, table: createTableSnapshot(game) };
 }
 
 function getTableGame(socket: GameSocket) {
@@ -1231,6 +1396,11 @@ function createTableGame(socket: GameSocket, payload: { sessionId: string }): Ta
     draw: false,
     battleHistory: [],
     shieldRotations: [],
+    roundMinutes: DEFAULT_ROUND_MINUTES,
+    planningEndsAt: null,
+    roundEndsAt: null,
+    overtime: false,
+    standingOrderPlayerIds: new Set(),
   };
 
   gamesByCode.set(game.code, game);
@@ -1326,6 +1496,14 @@ io.on("connection", (socket) => {
 
   socket.on("game:start", (acknowledge) => {
     acknowledge(startGame(socket));
+  });
+
+  socket.on("lobby:roundMinutes", (payload, acknowledge) => {
+    acknowledge(setLobbyRoundMinutes(socket, payload));
+  });
+
+  socket.on("table:roundMinutes", (payload, acknowledge) => {
+    acknowledge(setTableRoundMinutes(socket, payload));
   });
 
   socket.on("round:discard", (payload, acknowledge) => {

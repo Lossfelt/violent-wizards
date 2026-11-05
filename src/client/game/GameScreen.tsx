@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen } from "lucide-react";
 import type { ExchangeAction, GameSnapshot, MadoTuning } from "../../shared";
 import { MADO_TUNE_RANGE, SHIELD_ROTATION_RANGE, normalizeFrequency } from "../../shared";
@@ -7,6 +7,7 @@ import { DialCenter } from "./DialCenter";
 import { FeudList, FeudTable, feudDataFromGame } from "./FeudTable";
 import { FrequencyDial, type DialLane, type DialMado } from "./FrequencyDial";
 import { FRESHNESS_OPACITY, angleDelta, freshnessOf, isKnown, opponentColor } from "./dialMath";
+import { formatClock, useCountdown } from "../useCountdown";
 import "./game.css";
 
 export type GameActions = {
@@ -31,11 +32,31 @@ const STEPS: Array<[GameSnapshot["status"], string]> = [
   ["battle_resolution", "Warfare"],
 ];
 
+// Each wizard prepares and then declares at their own pace. Once you have prepared, your
+// screen moves on to Declare even while others are still preparing.
+function withOwnPhase(game: GameSnapshot): GameSnapshot {
+  const prepared = game.discardSubmittedPlayerIds.includes(game.currentPlayer.id);
+  return game.status === "round_prepare" && prepared ? { ...game, status: "attack_declaration" } : game;
+}
+
+function DeadlineClock({ game }: { game: GameSnapshot }) {
+  const seconds = useCountdown(game.phaseEndsInMs);
+  if (seconds === null) return null;
+
+  const label = game.status === "battle_resolution" ? "Round ends in" : "Planning ends in";
+  return (
+    <span className="game-clock" data-urgent={seconds <= 15} title={label}>
+      <span className="game-clock-label">{label}</span> {formatClock(seconds)}
+    </span>
+  );
+}
+
 function clamp(value: number, range: number) {
   return Math.round(Math.max(-range, Math.min(range, value)));
 }
 
-export function GameScreen({ game, actions, error, connected, onOpenRules }: Props) {
+export function GameScreen({ game: serverGame, actions, error, connected, onOpenRules }: Props) {
+  const game = useMemo(() => withOwnPhase(serverGame), [serverGame]);
   const me = game.currentPlayer;
   const battle = game.currentBattle;
   const inActiveBattle = game.status === "battle_resolution" && battle?.status === "active";
@@ -199,6 +220,7 @@ export function GameScreen({ game, actions, error, connected, onOpenRules }: Pro
             </li>
           ))}
         </ol>
+        <DeadlineClock game={game} />
         <span className="game-hp">
           <b data-hit={hitKey !== null} key={hitKey ?? "steady"}>
             {Math.max(0, Math.ceil(me.health))}

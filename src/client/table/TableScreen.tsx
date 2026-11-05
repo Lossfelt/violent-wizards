@@ -3,7 +3,8 @@ import { BookOpen } from "lucide-react";
 import type { TableSnapshot } from "../../shared";
 import { seatColor } from "../game/dialMath";
 import { FeudList, FeudTable, feudDataFromTable } from "../game/FeudTable";
-import { useCountdown } from "../useCountdown";
+import { RoundTimePicker } from "../RoundTimePicker";
+import { formatClock, useCountdown } from "../useCountdown";
 import "../game/game.css";
 import "./table.css";
 
@@ -14,16 +15,23 @@ type Props = {
   connected: boolean;
   error: string | null;
   onSaveMessage: (message: string) => Promise<boolean>;
+  onSetRoundMinutes: (minutes: number) => void;
   onStart: () => void;
   onNewGame: () => void;
   onOpenRules: () => void;
 };
 
 const PHASES: Array<[TableSnapshot["status"], string, string]> = [
-  ["round_prepare", "Prepare", "Wizards are choosing which Mados to keep and tune."],
+  ["round_prepare", "Prepare", "Wizards are preparing their Mados and choosing whom to attack."],
   ["attack_declaration", "Declare", "Wizards are choosing whom to attack."],
   ["battle_resolution", "Warfare", "Battles are being fought."],
 ];
+
+const DEADLINE_LABEL: Partial<Record<TableSnapshot["status"], string>> = {
+  round_prepare: "Planning ends in",
+  attack_declaration: "Planning ends in",
+  battle_resolution: "Round ends in",
+};
 
 function MessageEditor({ message, onSave }: { message: string; onSave: (message: string) => Promise<boolean> }) {
   const [editing, setEditing] = useState(false);
@@ -82,7 +90,7 @@ function isLoopback(url: string) {
   }
 }
 
-function TableLobby({ table, joinUrl, qrCodeUrl, onSaveMessage, onStart }: Props) {
+function TableLobby({ table, joinUrl, qrCodeUrl, onSaveMessage, onSetRoundMinutes, onStart }: Props) {
   return (
     <div className="table-lobby">
       <section className="table-invite">
@@ -117,6 +125,7 @@ function TableLobby({ table, joinUrl, qrCodeUrl, onSaveMessage, onStart }: Props
             </li>
           ))}
         </ul>
+        <RoundTimePicker minutes={table.roundMinutes} onChange={onSetRoundMinutes} />
         <button className="table-primary" disabled={table.players.length < 2} onClick={onStart} type="button">
           {table.players.length < 2 ? "Waiting for at least two wizards" : "Start the war"}
         </button>
@@ -127,6 +136,8 @@ function TableLobby({ table, joinUrl, qrCodeUrl, onSaveMessage, onStart }: Props
 
 function TableGame({ table, onNewGame }: Props) {
   const seconds = useCountdown(table.status === "round_cleanup" ? table.nextRoundInMs : null);
+  const deadline = useCountdown(table.phaseEndsInMs);
+  const deadlineLabel = DEADLINE_LABEL[table.status];
   const feuds = feudDataFromTable(table);
   const phase = PHASES.find(([status]) => status === table.status);
   const living = table.players.filter((player) => player.alive);
@@ -156,6 +167,11 @@ function TableGame({ table, onNewGame }: Props) {
                 : "The round is over."
               : `${phase?.[2] ?? ""} ${ready} of ${living.length} done.`}
         </p>
+        {deadlineLabel && deadline !== null ? (
+          <p className="table-deadline" data-urgent={deadline <= 15}>
+            {deadlineLabel} <b>{formatClock(deadline)}</b>
+          </p>
+        ) : null}
       </header>
 
       <section className="table-board">
@@ -172,7 +188,9 @@ function TableGame({ table, onNewGame }: Props) {
               <span>
                 {!player.alive
                   ? "fallen"
-                  : !player.connected
+                  : player.standingOrders && table.status !== "finished"
+                    ? "standing orders"
+                    : !player.connected
                     ? "offline"
                     : player.ready && table.status !== "round_cleanup" && table.status !== "finished"
                       ? "done ✓"

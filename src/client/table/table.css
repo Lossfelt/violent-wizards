@@ -197,6 +197,10 @@
 .table-status li { padding: 6px 16px; border-radius: 999px; color: var(--faint); }
 .table-status li[data-on="true"] { color: #171009; background: var(--gold-2); }
 .table-status p { margin: 0; color: var(--text); font-size: clamp(1.1rem, 2vw, 1.6rem); }
+.table-status .table-deadline { color: var(--muted); }
+.table-status .table-deadline b { color: var(--gold-2); font-variant-numeric: tabular-nums; }
+.table-status .table-deadline[data-urgent="true"] b { color: #f06e63; }
+.table-roster .round-time { margin: 0 0 20px; }
 
 .table-board .feud-table[data-size="full"] {
   width: auto;

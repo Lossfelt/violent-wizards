@@ -12,7 +12,7 @@ For parties, a TV or laptop can be the table screen instead. It hosts the
 lobby with a QR code and a message from the host ("the war starts at 21:30"),
 starts the game, and then shows the public state of the war for everyone in
 the room: the phase, who is done, who is fighting whom, rotations and who has
-fallen. Rounds advance on their own after a short countdown. Open the table
+fallen. Open the table
 screen through the computer's network address, not `localhost`, so phones can
 reach the join link.
 
@@ -41,10 +41,17 @@ Each round has these phases:
 1. Empty Mado slots are filled.
 2. Players may discard unwanted Mados and tune one Mado.
 3. Living players choose whether to attack another player, pass or rotate
-   their shield.
+   their shield. Each wizard prepares and declares at their own pace.
 4. Matched battles resolve through simultaneous exchanges.
-5. The round is cleaned up, deaths are applied, and the host starts the next
-   round.
+5. The round is cleaned up, deaths are applied, and the next round starts by
+   itself after a short break.
+
+Every round has a time limit the host picks before the game starts (2, 3, 5
+or 8 minutes, 5 by default). Planning must be done within the first 40% of
+it and battles by the end. A wizard who misses a deadline follows standing
+orders for the rest of the round: keep every Mado, stay hidden, and if
+attacked fire the first free Mado and then flee. So one guest who wanders off
+cannot stall the game.
 
 The last living wizard wins. If everyone dies at the same time, the game ends
 in a draw.

@@ -65,6 +65,15 @@ export {
   tuneMadoFrequency,
 } from "./rules.js";
 
+export {
+  DEFAULT_ROUND_MINUTES,
+  PLANNING_SHARE,
+  ROUND_BREAK_MS,
+  ROUND_MINUTE_OPTIONS,
+  clampRoundMinutes,
+  roundDeadlines,
+} from "./roundClock.js";
+
 export type ServerStatus = {
   ok: true;
   service: "violent-wizards-server";
@@ -92,6 +101,7 @@ export type LobbySnapshot = {
   hostPlayerId: string | null;
   tableHosted: boolean;
   message: string;
+  roundMinutes: number;
   currentPlayerId: string;
   players: LobbyPlayer[];
 };
@@ -191,8 +201,13 @@ export type GameSnapshot = {
   roundNumber: number;
   hostPlayerId: string | null;
   tableHosted: boolean;
-  // Time left before the next round starts by itself, or null when someone has to start it.
+  // Time left before the next round starts by itself.
   nextRoundInMs: number | null;
+  roundMinutes: number;
+  // Time left before the current deadline: the end of planning, or the end of the round.
+  phaseEndsInMs: number | null;
+  // Wizards who missed a deadline this round and follow standing orders for the rest of it.
+  standingOrderPlayerIds: string[];
   currentPlayer: CurrentPlayerSnapshot;
   opponents: OpponentSnapshot[];
   shareableInsights: ShareableInsightSnapshot[];
@@ -215,8 +230,10 @@ export type TablePlayer = {
   seat: number;
   connected: boolean;
   alive: boolean;
-  // Done with the current phase: prepared, declared, or finished fighting.
+  // Done with the current phase: planned (prepared and declared), or finished fighting.
   ready: boolean;
+  // Missed a deadline this round and follows standing orders.
+  standingOrders: boolean;
 };
 
 export type TableBattle = RoundBattlePreview & {
@@ -236,6 +253,8 @@ export type TableSnapshot = {
   winnerPlayerId: string | null;
   draw: boolean;
   nextRoundInMs: number | null;
+  roundMinutes: number;
+  phaseEndsInMs: number | null;
 };
 
 export type TableActionResult =
@@ -274,6 +293,10 @@ export type ClientToServerEvents = {
     acknowledge: (result: LobbyActionResult) => void,
   ) => void;
   "game:start": (acknowledge: (result: GameActionResult) => void) => void;
+  "lobby:roundMinutes": (
+    payload: { minutes: number },
+    acknowledge: (result: LobbyActionResult) => void,
+  ) => void;
   "round:discard": (
     payload: { slotIndexes: number[]; tuning?: MadoTuning | null },
     acknowledge: (result: GameActionResult) => void,
@@ -304,6 +327,10 @@ export type ClientToServerEvents = {
     acknowledge: (result: TableActionResult) => void,
   ) => void;
   "table:start": (acknowledge: (result: TableActionResult) => void) => void;
+  "table:roundMinutes": (
+    payload: { minutes: number },
+    acknowledge: (result: TableActionResult) => void,
+  ) => void;
 };
 
 export type InterServerEvents = Record<string, never>;
