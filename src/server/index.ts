@@ -8,29 +8,43 @@ import type {
   ExchangeAction,
   GameActionResult,
   GameSnapshot,
+  InsightState,
   InterServerEvents,
   LobbyActionResult,
   LobbyPlayer,
+  LastExchangeSnapshot,
   LobbySnapshot,
+  MadoTuning,
   MatchmakingBattle,
   Player,
   PublicBattleHistoryEntry,
+  PublicShieldRotation,
   RoundBattlePreview,
   ServerStatus,
   ServerToClientEvents,
   SocketData,
 } from "../shared/index.js";
 import {
+  SHIELD_DRIFT_MAX,
+  SHIELD_ROTATION_RANGE,
   STARTING_HEALTH,
-  addInsightFromDamage,
-  applySharedInsight,
-  calculateDamage,
+  applyEcho,
+  clampShieldRotation,
   createInitialInsight,
+  dilateInsight,
   discardMados,
   fillEmptyMadoSlots,
+  fleeMultiplierForRound,
+  isInsightNarrowed,
+  mergeSharedInsight,
+  normalizeFrequency,
   randomFrequency,
+  randomShieldDrift,
   removeDeadPlayerInsights,
   resolveAttackDeclarations,
+  resolveMadoHit,
+  toFrequencyArcs,
+  tuneMado,
 } from "../shared/index.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -81,6 +95,7 @@ type LobbyGame = {
   winnerPlayerId: string | null;
   draw: boolean;
   battleHistory: PublicBattleHistoryEntry[];
+  shieldRotations: PublicShieldRotation[];
 };
 
 type GameSocket = Socket<
@@ -185,12 +200,34 @@ function createCurrentBattleSnapshot(
       ...(battle.usedMadoSlotIndexesByPlayerId[currentPlayerId] ?? new Set<number>()),
     ],
     totalDamageTaken,
-    lastExchange: lastExchange
-      ? {
-          index: lastExchange.index,
-          damageTaken: lastExchange.damageByPlayerId[currentPlayerId] ?? 0,
-        }
-      : null,
+    lastExchange: lastExchange ? createLastExchangeSnapshot(lastExchange, currentPlayerId) : null,
+    shots: battle.exchanges.flatMap((exchange) => {
+      const echo = exchange.echoByAttackerId[currentPlayerId];
+      const frequency = exchange.firedFrequencyByPlayerId[currentPlayerId];
+      return echo && frequency != null ? [{ frequency, echo }] : [];
+    }),
+  };
+}
+
+function createLastExchangeSnapshot(
+  exchange: Exchange,
+  currentPlayerId: string,
+): LastExchangeSnapshot {
+  return {
+    index: exchange.index,
+    damageTaken: exchange.damageByPlayerId[currentPlayerId] ?? 0,
+    echo: exchange.echoByAttackerId[currentPlayerId] ?? null,
+    firedFrequency: exchange.firedFrequencyByPlayerId[currentPlayerId] ?? null,
+  };
+}
+
+function createKnownShieldSnapshot(insight: InsightState | undefined) {
+  const candidates = insight?.candidates ?? createInitialInsight().candidates;
+
+  return {
+    arcs: toFrequencyArcs(candidates),
+    possibleCount: candidates.length,
+    lastNarrowedRound: insight?.lastNarrowedRound ?? null,
   };
 }
 
@@ -214,8 +251,10 @@ function createGameSnapshot(game: LobbyGame, currentPlayerId: string): GameSnaps
         currentPlayer.health,
       alive: currentPlayer.alive,
       shieldFrequency: currentPlayer.shieldFrequency,
+      shieldDrift: currentPlayer.shieldDrift,
       madoSlots: currentPlayer.madoSlots,
       discardedThisRound: [...currentPlayer.discardedThisRound],
+      rotatingThisRound: isRotating(currentPlayer),
     },
     opponents: [...game.playersById.values()]
       .filter((player) => player.id !== currentPlayerId)
@@ -225,20 +264,17 @@ function createGameSnapshot(game: LobbyGame, currentPlayerId: string): GameSnaps
         alive: game.gamePlayersById.get(player.id)?.alive ?? true,
         host: player.host,
         connected: player.connected,
-        insight: {
-          level: currentPlayer.insightsByTarget[player.id]?.level ?? 0,
-          segment:
-            currentPlayer.insightsByTarget[player.id]?.segment ??
-            createInitialInsight(0).segment,
-        },
+        lastRotatedRound:
+          game.shieldRotations.filter((rotation) => rotation.playerId === player.id).at(-1)
+            ?.roundNumber ?? null,
+        insight: createKnownShieldSnapshot(currentPlayer.insightsByTarget[player.id]),
       })),
     shareableInsights: Object.entries(currentPlayer.insightsByTarget)
-      .filter(([, insight]) => insight.level > 0)
+      .filter(([, insight]) => isInsightNarrowed(insight))
       .map(([targetPlayerId, insight]) => ({
+        ...createKnownShieldSnapshot(insight),
         targetPlayerId,
         targetName: game.playersById.get(targetPlayerId)?.name ?? "Unknown",
-        level: insight.level,
-        segment: insight.segment,
       })),
     receivedInsights: currentPlayer.receivedInsights,
     discardSubmittedPlayerIds: [...game.discardSubmittedPlayerIds],
@@ -248,19 +284,24 @@ function createGameSnapshot(game: LobbyGame, currentPlayerId: string): GameSnaps
     ),
     currentBattle: createCurrentBattleSnapshot(game, currentPlayerId),
     battleHistory: game.battleHistory,
+    shieldRotations: game.shieldRotations,
     unmatchedAttackerIds: game.unmatchedAttackerIds,
     winnerPlayerId: game.winnerPlayerId,
     draw: game.draw,
   };
 }
 
+// A player can briefly have more than one socket, for example when a phone reconnects
+// before the server has noticed that the old connection died. Every one of them gets updates.
+function socketsForPlayer(playerId: string): GameSocket[] {
+  return [...io.sockets.sockets.values()].filter(
+    (candidate) => candidate.data.playerId === playerId,
+  );
+}
+
 function emitGameUpdate(game: LobbyGame) {
   for (const player of game.playersById.values()) {
-    const socket = [...io.sockets.sockets.values()].find(
-      (candidate) => candidate.data.playerId === player.id,
-    );
-
-    if (socket) {
+    for (const socket of socketsForPlayer(player.id)) {
       if (game.status === "lobby") {
         socket.emit("lobby:updated", createLobbySnapshot(game, player.id));
       } else {
@@ -312,6 +353,7 @@ function createGameForPlayer(
     winnerPlayerId: null,
     draw: false,
     battleHistory: [],
+    shieldRotations: [],
   };
 
   gamesByCode.set(code, game);
@@ -361,6 +403,30 @@ function joinGameForPlayer(
   return { ok: true, lobby: createLobbySnapshot(game, player.id) };
 }
 
+// Reattaches a returning session (after a dropped connection or a page reload) without
+// renaming the player or letting a new player into a started game.
+function resumeSessionForPlayer(
+  socket: GameSocket,
+  payload: { sessionId: string; code: string },
+): LobbyActionResult {
+  const game = gamesByCode.get(normalizeLobbyCode(payload.code));
+  const player = game ? findPlayerBySession(game, payload.sessionId) : undefined;
+
+  if (!game || !player) {
+    return { ok: false, error: "That game is no longer available." };
+  }
+
+  player.connected = true;
+  attachSocketToPlayer(game, socket, player);
+  emitGameUpdate(game);
+
+  if (game.status !== "lobby") {
+    return { ok: true, game: createGameSnapshot(game, player.id) };
+  }
+
+  return { ok: true, lobby: createLobbySnapshot(game, player.id) };
+}
+
 function getSocketGame(socket: GameSocket): LobbyGame | undefined {
   if (!socket.data.gameCode) {
     return undefined;
@@ -376,6 +442,7 @@ function createPlayerFromLobbyPlayer(player: LobbyPlayer): Player {
     health: STARTING_HEALTH,
     alive: true,
     shieldFrequency: randomFrequency(),
+    shieldDrift: randomShieldDrift(),
     madoSlots: fillEmptyMadoSlots([], (slotIndex) => {
       return `p-${player.id}-r-1-s-${slotIndex}-${crypto.randomUUID()}`;
     }),
@@ -420,12 +487,14 @@ function startGame(socket: GameSocket): GameActionResult {
   game.unmatchedAttackerIds = [];
   game.winnerPlayerId = null;
   game.draw = false;
+  game.battleHistory = [];
+  game.shieldRotations = [];
 
   for (const player of game.gamePlayersById.values()) {
     player.insightsByTarget = Object.fromEntries(
       [...game.gamePlayersById.values()]
         .filter((target) => target.id !== player.id)
-        .map((target) => [target.id, createInitialInsight(target.shieldFrequency)]),
+        .map((target) => [target.id, createInitialInsight()]),
     );
   }
 
@@ -451,7 +520,10 @@ function createActiveBattle(game: LobbyGame, battle: MatchmakingBattle): ActiveB
     status: "active",
     exchanges: [],
     actionsByPlayerId: {},
-    fleeingPlayerIds: new Set(),
+    // A wizard who is rotating their shield cannot fire back, only flee.
+    fleeingPlayerIds: new Set(
+      [playerA, playerB].filter((player) => isRotating(player)).map((player) => player.id),
+    ),
     usedMadoSlotIndexesByPlayerId: {
       [battle.playerAId]: new Set<number>(),
       [battle.playerBId]: new Set<number>(),
@@ -586,9 +658,13 @@ function resolveReadyBattleExchange(game: LobbyGame, battle: ActiveBattle) {
     [playerA.id]: 0,
     [playerB.id]: 0,
   };
-  const insightGainByAttackerId: Record<string, number> = {
-    [playerA.id]: 0,
-    [playerB.id]: 0,
+  const echoByAttackerId: Exchange["echoByAttackerId"] = {
+    [playerA.id]: null,
+    [playerB.id]: null,
+  };
+  const firedFrequencyByPlayerId: Exchange["firedFrequencyByPlayerId"] = {
+    [playerA.id]: null,
+    [playerB.id]: null,
   };
   const usedThisExchange: Record<string, number[]> = {
     [playerA.id]: [],
@@ -606,29 +682,24 @@ function resolveReadyBattleExchange(game: LobbyGame, battle: ActiveBattle) {
     const mado = attacker.madoSlots[action.madoSlotIndex]!;
     const defenderFleeing = battle.fleeingPlayerIds.has(defender.id);
     const fleeRoundIndex = Math.max(0, countFleeRoundsForPlayer(battle, defender.id));
-    const fleeMultiplier = defenderFleeing
-      ? [0.5, 0.4, 0.3, 0.2, 0.1][Math.min(fleeRoundIndex, 4)]!
-      : 1;
-    const damage = calculateDamage(mado.frequency, defender.shieldFrequency, fleeMultiplier);
+    const fleeMultiplier = defenderFleeing ? fleeMultiplierForRound(fleeRoundIndex) : 1;
+    const hit = resolveMadoHit(mado.frequency, defender.shieldFrequency, fleeMultiplier);
 
-    damageByPlayerId[defender.id] = damage;
-    insightGainByAttackerId[attacker.id] = damage;
+    damageByPlayerId[defender.id] = hit.damage;
+    echoByAttackerId[attacker.id] = hit.echo;
+    firedFrequencyByPlayerId[attacker.id] = mado.frequency;
+    attacker.insightsByTarget[defender.id] = applyEcho(
+      attacker.insightsByTarget[defender.id],
+      mado.frequency,
+      hit.echo,
+      game.roundNumber,
+    );
     battle.usedMadoSlotIndexesByPlayerId[attacker.id]!.add(action.madoSlotIndex);
     usedThisExchange[attacker.id]!.push(action.madoSlotIndex);
   }
 
   battle.healthByPlayerId[playerA.id] -= damageByPlayerId[playerA.id]!;
   battle.healthByPlayerId[playerB.id] -= damageByPlayerId[playerB.id]!;
-  playerA.insightsByTarget[playerB.id] = addInsightFromDamage(
-    playerA.insightsByTarget[playerB.id],
-    playerB.shieldFrequency,
-    insightGainByAttackerId[playerA.id]!,
-  );
-  playerB.insightsByTarget[playerA.id] = addInsightFromDamage(
-    playerB.insightsByTarget[playerA.id],
-    playerA.shieldFrequency,
-    insightGainByAttackerId[playerB.id]!,
-  );
 
   battle.exchanges.push({
     index: battle.exchanges.length,
@@ -637,7 +708,8 @@ function resolveReadyBattleExchange(game: LobbyGame, battle: ActiveBattle) {
       [playerB.id]: actionB,
     },
     damageByPlayerId,
-    insightGainByAttackerId,
+    echoByAttackerId,
+    firedFrequencyByPlayerId,
     fleeingPlayerIdsAfterExchange: [...battle.fleeingPlayerIds],
     usedMadoSlotIndexesByPlayerId: usedThisExchange,
   });
@@ -686,6 +758,7 @@ function startNextRound(socket: GameSocket): GameActionResult {
 
   game.roundNumber += 1;
   game.status = "round_prepare";
+  driftShields(game);
   game.discardSubmittedPlayerIds = new Set();
   game.attackSubmittedPlayerIds = new Set();
   game.pendingBattles = [];
@@ -737,6 +810,8 @@ function commitFinishedRoundIfReady(game: LobbyGame) {
       ),
     });
   }
+
+  applyShieldRotations(game);
 
   const cleanedPlayers = removeDeadPlayerInsights([...game.gamePlayersById.values()]);
   game.gamePlayersById = new Map(cleanedPlayers.map((player) => [player.id, player]));
@@ -815,30 +890,24 @@ function shareInsight(
 
   const senderInsight = sender.insightsByTarget[target.id];
 
-  if (!senderInsight || senderInsight.level <= 0) {
+  if (!senderInsight || !isInsightNarrowed(senderInsight)) {
     return { ok: false, error: "You do not have insight to share about that target." };
   }
 
-  const currentReceiverInsight = receiver.insightsByTarget[target.id];
-  receiver.insightsByTarget[target.id] = applySharedInsight(
-    currentReceiverInsight,
-    target.shieldFrequency,
-    senderInsight.level,
+  receiver.insightsByTarget[target.id] = mergeSharedInsight(
+    receiver.insightsByTarget[target.id],
+    senderInsight,
+    game.roundNumber,
   );
-  receiver.receivedInsights.push({
+
+  const transfer = {
     fromPlayerId: sender.id,
     targetPlayerId: target.id,
-    level: senderInsight.level,
-    segment: senderInsight.segment,
+    ...createKnownShieldSnapshot(senderInsight),
     roundNumber: game.roundNumber,
-  });
-  sender.receivedInsights.push({
-    fromPlayerId: sender.id,
-    targetPlayerId: target.id,
-    level: senderInsight.level,
-    segment: senderInsight.segment,
-    roundNumber: game.roundNumber,
-  });
+  };
+  receiver.receivedInsights.push(transfer);
+  sender.receivedInsights.push(transfer);
 
   emitGameUpdate(game);
   return { ok: true, game: createGameSnapshot(game, sender.id) };
@@ -846,7 +915,7 @@ function shareInsight(
 
 function submitDiscards(
   socket: GameSocket,
-  payload: { slotIndexes: number[] },
+  payload: { slotIndexes: number[]; tuning?: MadoTuning | null },
 ): GameActionResult {
   const game = getSocketGame(socket);
   const playerId = socket.data.playerId;
@@ -859,6 +928,10 @@ function submitDiscards(
     return { ok: false, error: "Discarding is not available in this phase." };
   }
 
+  if (game.discardSubmittedPlayerIds.has(playerId)) {
+    return { ok: false, error: "You have already prepared your Mados this round." };
+  }
+
   const player = game.gamePlayersById.get(playerId);
 
   if (!player || !player.alive) {
@@ -868,7 +941,22 @@ function submitDiscards(
   const slotIndexes = [...new Set(payload.slotIndexes)]
     .filter((slotIndex) => Number.isInteger(slotIndex))
     .filter((slotIndex) => slotIndex >= 0 && slotIndex < player.madoSlots.length);
-  game.gamePlayersById.set(playerId, discardMados(player, slotIndexes));
+  const tuning = payload.tuning ?? null;
+
+  if (tuning) {
+    const validTuning =
+      Number.isInteger(tuning.slotIndex) &&
+      Number.isFinite(tuning.frequency) &&
+      player.madoSlots[tuning.slotIndex] != null &&
+      !slotIndexes.includes(tuning.slotIndex);
+
+    if (!validTuning) {
+      return { ok: false, error: "Choose a Mado you keep to tune." };
+    }
+  }
+
+  const tunedPlayer = tuning ? tuneMado(player, tuning.slotIndex, tuning.frequency) : player;
+  game.gamePlayersById.set(playerId, discardMados(tunedPlayer, slotIndexes));
   game.discardSubmittedPlayerIds.add(playerId);
 
   if (livingPlayerIds(game).every((id) => game.discardSubmittedPlayerIds.has(id))) {
@@ -879,9 +967,52 @@ function submitDiscards(
   return { ok: true, game: createGameSnapshot(game, playerId) };
 }
 
+function isRotating(player: Player): boolean {
+  return player.attackIntent !== undefined && "rotate" in player.attackIntent;
+}
+
+function driftShields(game: LobbyGame) {
+  for (const player of game.gamePlayersById.values()) {
+    if (player.alive) {
+      player.shieldFrequency = normalizeFrequency(player.shieldFrequency + player.shieldDrift);
+    }
+
+    for (const [targetId, insight] of Object.entries(player.insightsByTarget)) {
+      player.insightsByTarget[targetId] = dilateInsight(insight, SHIELD_DRIFT_MAX);
+    }
+  }
+}
+
+function applyShieldRotations(game: LobbyGame) {
+  for (const rotator of game.gamePlayersById.values()) {
+    if (!rotator.alive || !rotator.attackIntent || !("rotate" in rotator.attackIntent)) {
+      continue;
+    }
+
+    rotator.shieldFrequency = normalizeFrequency(
+      rotator.shieldFrequency + rotator.attackIntent.rotate.delta,
+    );
+    // Rotating also resets the drift, so a tracked drift direction is lost too.
+    rotator.shieldDrift = randomShieldDrift();
+    game.shieldRotations.push({
+      roundNumber: game.roundNumber,
+      playerId: rotator.id,
+      playerName: rotator.name,
+    });
+
+    for (const observer of game.gamePlayersById.values()) {
+      const insight = observer.insightsByTarget[rotator.id];
+
+      if (observer.id !== rotator.id && insight) {
+        observer.insightsByTarget[rotator.id] = dilateInsight(insight, SHIELD_ROTATION_RANGE);
+      }
+    }
+  }
+}
+
 function submitAttack(
   socket: GameSocket,
-  payload: { targetPlayerId: string | null },
+  payload: { targetPlayerId: string | null; rotation?: number | null },
 ): GameActionResult {
   const game = getSocketGame(socket);
   const playerId = socket.data.playerId;
@@ -908,7 +1039,18 @@ function submitAttack(
     return { ok: false, error: "Choose a living opponent or pass." };
   }
 
-  player.attackIntent = target ? { targetPlayerId: target.id } : { pass: true };
+  const rotation = payload.rotation ?? null;
+
+  if (rotation !== null && (target || !Number.isFinite(rotation))) {
+    return { ok: false, error: "Rotate your shield or attack, not both." };
+  }
+
+  player.attackIntent =
+    rotation !== null
+      ? { rotate: { delta: clampShieldRotation(rotation) } }
+      : target
+        ? { targetPlayerId: target.id }
+        : { pass: true };
   game.attackSubmittedPlayerIds.add(playerId);
 
   if (livingPlayerIds(game).every((id) => game.attackSubmittedPlayerIds.has(id))) {
@@ -922,6 +1064,10 @@ function submitAttack(
     );
     game.unmatchedAttackerIds = matchmaking.unmatchedAttackerIds;
     game.status = matchmaking.battles.length > 0 ? "battle_resolution" : "round_cleanup";
+
+    if (game.status === "round_cleanup") {
+      applyShieldRotations(game);
+    }
   }
 
   emitGameUpdate(game);
@@ -960,6 +1106,10 @@ io.on("connection", (socket) => {
     acknowledge(createGameForPlayer(socket, payload));
   });
 
+  socket.on("session:resume", (payload, acknowledge) => {
+    acknowledge(resumeSessionForPlayer(socket, payload));
+  });
+
   socket.on("lobby:join", (payload, acknowledge) => {
     acknowledge(joinGameForPlayer(socket, payload));
   });
@@ -993,7 +1143,7 @@ io.on("connection", (socket) => {
       const game = gamesByCode.get(socket.data.gameCode);
       const player = game?.playersById.get(socket.data.playerId);
 
-      if (game && player) {
+      if (game && player && socketsForPlayer(player.id).length === 0) {
         player.connected = false;
         emitGameUpdate(game);
       }

@@ -1,7 +1,7 @@
 import type {
-  Exchange,
+  EchoBand,
   ExchangeAction,
-  FrequencySegment,
+  FrequencyArc,
   GameStatus,
   InsightTransfer,
   Mado,
@@ -10,8 +10,9 @@ import type {
 export type AppPhase = "setup";
 
 export type {
-  FrequencySegment,
   Battle,
+  EchoBand,
+  FrequencyArc,
   Exchange,
   ExchangeAction,
   GameStatus,
@@ -25,32 +26,43 @@ export type {
 } from "./gameTypes.js";
 
 export {
+  ECHO_BANDS,
   FLEE_DAMAGE_MULTIPLIERS,
-  INSIGHT_NOISE_MAX,
-  INSIGHT_NOISE_MIN,
-  INSIGHT_SEGMENT_COUNTS,
-  INSIGHT_THRESHOLDS,
+  FREQUENCY_COUNT,
+  FULL_DAMAGE_DISTANCE,
   MADO_BASE_DAMAGE,
+  MADO_TUNE_RANGE,
   MAX_FREQUENCY,
   MAX_MADOS,
   MIN_FREQUENCY,
+  SHIELD_DRIFT_MAX,
+  SHIELD_DRIFT_MIN,
+  SHIELD_ROTATION_RANGE,
   STARTING_HEALTH,
-  addInsightFromDamage,
-  applySharedInsight,
+  ZERO_DAMAGE_DISTANCE,
+  applyEcho,
   calculateDamage,
   circularDistance,
+  clampShieldRotation,
   createInitialInsight,
+  dilateInsight,
   createMado,
   discardMados,
   fillEmptyMadoSlots,
-  getInsightLevel,
-  getInsightMinimumPoints,
-  getInsightSegment,
+  fleeMultiplierForRound,
+  getEchoBand,
+  isInsightNarrowed,
+  mergeSharedInsight,
   normalizeFrequency,
   randomFrequency,
+  randomShieldDrift,
   removeDeadPlayerInsights,
   resolveAttackDeclarations,
+  resolveMadoHit,
   resolveScriptedBattle,
+  toFrequencyArcs,
+  tuneMado,
+  tuneMadoFrequency,
 } from "./rules.js";
 
 export type ServerStatus = {
@@ -86,8 +98,10 @@ export type CurrentPlayerSnapshot = {
   health: number;
   alive: boolean;
   shieldFrequency: number;
+  shieldDrift: number;
   madoSlots: Array<Mado | null>;
   discardedThisRound: number[];
+  rotatingThisRound: boolean;
 };
 
 export type OpponentSnapshot = {
@@ -96,17 +110,26 @@ export type OpponentSnapshot = {
   alive: boolean;
   host: boolean;
   connected: boolean;
-  insight: {
-    level: number;
-    segment: FrequencySegment;
-  };
+  insight: KnownShieldSnapshot;
+  lastRotatedRound: number | null;
 };
 
-export type ShareableInsightSnapshot = {
+export type KnownShieldSnapshot = {
+  arcs: FrequencyArc[];
+  possibleCount: number;
+  lastNarrowedRound: number | null;
+};
+
+// Rotating a shield is felt by every wizard, so it is public. The new frequency is not.
+export type PublicShieldRotation = {
+  roundNumber: number;
+  playerId: string;
+  playerName: string;
+};
+
+export type ShareableInsightSnapshot = KnownShieldSnapshot & {
   targetPlayerId: string;
   targetName: string;
-  level: number;
-  segment: FrequencySegment;
 };
 
 export type RoundBattlePreview = {
@@ -127,11 +150,21 @@ export type CurrentBattleSnapshot = RoundBattlePreview & {
   usedMadoSlotIndexes: number[];
   totalDamageTaken: number;
   lastExchange: LastExchangeSnapshot | null;
+  // Your own shots in this battle, oldest first, so the dial can mark every echo.
+  shots: Array<{ frequency: number; echo: EchoBand }>;
 };
 
 export type LastExchangeSnapshot = {
   index: number;
   damageTaken: number;
+  // What your own Mado reported back, or null if you did not fire.
+  echo: EchoBand | null;
+  firedFrequency: number | null;
+};
+
+export type MadoTuning = {
+  slotIndex: number;
+  frequency: number;
 };
 
 export type PublicBattleHistoryEntry = {
@@ -157,6 +190,7 @@ export type GameSnapshot = {
   pendingBattles: RoundBattlePreview[];
   currentBattle: CurrentBattleSnapshot | null;
   battleHistory: PublicBattleHistoryEntry[];
+  shieldRotations: PublicShieldRotation[];
   unmatchedAttackerIds: string[];
   winnerPlayerId: string | null;
   draw: boolean;
@@ -184,17 +218,21 @@ export type ClientToServerEvents = {
     payload: { sessionId: string; name: string },
     acknowledge: (result: LobbyActionResult) => void,
   ) => void;
+  "session:resume": (
+    payload: { sessionId: string; code: string },
+    acknowledge: (result: LobbyActionResult) => void,
+  ) => void;
   "lobby:join": (
     payload: { sessionId: string; name: string; code: string },
     acknowledge: (result: LobbyActionResult) => void,
   ) => void;
   "game:start": (acknowledge: (result: GameActionResult) => void) => void;
   "round:discard": (
-    payload: { slotIndexes: number[] },
+    payload: { slotIndexes: number[]; tuning?: MadoTuning | null },
     acknowledge: (result: GameActionResult) => void,
   ) => void;
   "round:attack": (
-    payload: { targetPlayerId: string | null },
+    payload: { targetPlayerId: string | null; rotation?: number | null },
     acknowledge: (result: GameActionResult) => void,
   ) => void;
   "battle:action": (
