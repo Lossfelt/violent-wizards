@@ -8,6 +8,14 @@ from their own phones. The game is built for people playing in the same room,
 with the app handling the hidden state, realtime combat, and exact information
 sharing.
 
+For parties, a TV or laptop can be the table screen instead. It hosts the
+lobby with a QR code and a message from the host ("the war starts at 21:30"),
+starts the game, and then shows the public state of the war for everyone in
+the room: the phase, who is done, who is fighting whom, rotations and who has
+fallen. Rounds advance on their own after a short countdown. Open the table
+screen through the computer's network address, not `localhost`, so phones can
+reach the join link.
+
 ## Game Summary
 
 Each wizard has:

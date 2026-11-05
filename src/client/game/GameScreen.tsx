@@ -4,7 +4,7 @@ import type { ExchangeAction, GameSnapshot, MadoTuning } from "../../shared";
 import { MADO_TUNE_RANGE, SHIELD_ROTATION_RANGE, normalizeFrequency } from "../../shared";
 import { ActionSheet } from "./ActionSheet";
 import { DialCenter } from "./DialCenter";
-import { FeudList, FeudTable } from "./FeudTable";
+import { FeudList, FeudTable, feudDataFromGame } from "./FeudTable";
 import { FrequencyDial, type DialLane, type DialMado } from "./FrequencyDial";
 import { FRESHNESS_OPACITY, angleDelta, freshnessOf, isKnown, opponentColor } from "./dialMath";
 import "./game.css";
@@ -171,6 +171,7 @@ export function GameScreen({ game, actions, error, connected, onOpenRules }: Pro
     if (ok) setToast(`You shared what you know about ${focus.name} with ${receiver}.`);
   }
 
+  const feuds = feudDataFromGame(game);
   const draggableSlot =
     preparing && activeSlot !== null && !discards.includes(activeSlot) ? activeSlot : null;
 
@@ -213,7 +214,7 @@ export function GameScreen({ game, actions, error, connected, onOpenRules }: Pro
           </button>
         ))}
         <button aria-label="Open the table of fights" className="game-mini-table" onClick={() => setTableOpen(true)} type="button">
-          <FeudTable focusId={focus?.id ?? null} game={game} size="mini" />
+          <FeudTable data={feuds} focusId={focus?.id ?? null} size="mini" />
         </button>
       </div>
 
@@ -288,8 +289,8 @@ export function GameScreen({ game, actions, error, connected, onOpenRules }: Pro
       {tableOpen ? (
         <div aria-label="The table" className="game-overlay" onClick={() => setTableOpen(false)} role="dialog">
           <FeudTable
+            data={feuds}
             focusId={focus?.id ?? null}
-            game={game}
             onSelect={(id) => {
               if (!lockedId) setFocusId(id);
               setTableOpen(false);
@@ -304,7 +305,7 @@ export function GameScreen({ game, actions, error, connected, onOpenRules }: Pro
           >
             {showNumbers ? "Hide numbers" : "Show numbers"}
           </button>
-          {showNumbers ? <FeudList game={game} /> : null}
+          {showNumbers ? <FeudList data={feuds} /> : null}
           <p>Tap a wizard to focus the dial. Tap anywhere else to close.</p>
         </div>
       ) : null}

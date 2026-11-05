@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ExchangeAction, GameSnapshot } from "../../shared";
+import { useCountdown } from "../useCountdown";
 import { ECHO_COLOR, isKnown, type Opponent } from "./dialMath";
 
 type Props = {
@@ -45,6 +46,18 @@ function BattleSummary({ game }: { game: GameSnapshot }) {
         </span>
       ) : null}
     </div>
+  );
+}
+
+function RoundBreak({ game }: { game: GameSnapshot }) {
+  const seconds = useCountdown(game.nextRoundInMs);
+
+  if (seconds !== null) {
+    return <p className="sheet-hint">Round over. The next round starts in {seconds} s.</p>;
+  }
+
+  return game.hostPlayerId === game.currentPlayer.id ? null : (
+    <p className="sheet-hint">Round over. Waiting for the host to start the next one.</p>
   );
 }
 
@@ -217,13 +230,12 @@ function PhaseContent(props: Props) {
   return (
     <>
       <BattleSummary game={game} />
-      {game.hostPlayerId === me.id ? (
+      {game.hostPlayerId === me.id && !game.tableHosted ? (
         <button className="sheet-primary" onClick={props.onNextRound} type="button">
           Start next round
         </button>
-      ) : (
-        <p className="sheet-hint">Round over. Waiting for the host to start the next one.</p>
-      )}
+      ) : null}
+      <RoundBreak game={game} />
     </>
   );
 }

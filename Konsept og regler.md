@@ -58,6 +58,8 @@ Hver spiller sin helse starter på 200 poeng. Spillernes helse er skjult for hve
 
 1. Én person starter et nytt spill og åpner en "lobby". Andre spillere kan bli med i spillet med en oppgitt kode. Når alle er klare starter den første spilleren selve spillet, og man går inn i første runde.
 
+   * På fest kan lobbyen i stedet ligge på en felles skjerm (bordskjerm), for eksempel en TV. Verten skriver en kort beskjed som vises der, for eksempel når spillet starter, og gjestene melder seg på fra telefonen. Bordskjermen er ingen spiller. Den starter spillet og viser deretter det alle trollmenn kan sanse: fase, hvem som er ferdige, hvem som slåss, rotasjoner og hvem som har falt. Helse og frekvenser vises aldri der. Neste runde starter av seg selv etter en kort nedtelling.
+
 2. Hver runde består av følgende sekvenser:
    
    1. Hver spiller har fem Mado-slots. Ved starten av hver runde fylles alle tomme slots automatisk med nye Mados. Mados som ikke ble brukt i forrige runde blir liggende.

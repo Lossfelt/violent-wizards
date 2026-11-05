@@ -8,14 +8,18 @@ import type {
   GameSnapshot,
   LobbySnapshot,
   ServerToClientEvents,
+  TableActionResult,
+  TableSnapshot,
 } from "../shared";
 import { MADO_TUNE_RANGE, SHIELD_DRIFT_MAX, SHIELD_ROTATION_RANGE } from "../shared";
 import { GameScreen, type GameActions } from "./game/GameScreen";
+import { TableScreen } from "./table/TableScreen";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 
 const SESSION_STORAGE_KEY = "violent-wizards-session-id";
 const GAME_CODE_STORAGE_KEY = "violent-wizards-game-code";
+const TABLE_CODE_STORAGE_KEY = "violent-wizards-table-code";
 const SERVER_URL = import.meta.env.VITE_SERVER_URL;
 
 // crypto.randomUUID only exists in secure contexts (https or localhost). Phones that join a
@@ -223,6 +227,7 @@ function LobbyPanel({
   connectionError,
   connectionState,
   createLobby,
+  createTable,
   currentPlayer,
   isLobbyHost,
   joinCode,
@@ -240,6 +245,7 @@ function LobbyPanel({
   connectionError: string | null;
   connectionState: ConnectionState;
   createLobby: () => void;
+  createTable: () => void;
   currentPlayer: LobbySnapshot["players"][number] | undefined;
   isLobbyHost: boolean;
   joinCode: string;
@@ -303,12 +309,22 @@ function LobbyPanel({
           </p>
         ) : null}
         {lobbyError ? <p className="form-error">{lobbyError}</p> : null}
+        <div className="table-offer">
+          <p>
+            Hosting a party? Put the lobby on a TV or laptop everyone can see. Guests join from
+            their phones, and the screen shows the war once it starts.
+          </p>
+          <button disabled={connectionState !== "connected"} onClick={createTable} type="button">
+            Use this device as the table screen
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="lobby-room">
+      {lobby.message ? <blockquote className="host-message">{lobby.message}</blockquote> : null}
       <div className="join-link">
         <span>Join link</span>
         <code>{joinUrl}</code>
@@ -342,7 +358,11 @@ function LobbyPanel({
           Start game
         </button>
       ) : (
-        <p className="waiting-copy">Waiting for the host to start.</p>
+        <p className="waiting-copy">
+          {lobby.tableHosted
+            ? "Waiting for the game to be started from the table screen."
+            : "Waiting for the host to start."}
+        </p>
       )}
       {gameError ? <p className="form-error">{gameError}</p> : null}
     </div>
@@ -361,6 +381,7 @@ export function App() {
   const [joinCode, setJoinCode] = useState("");
   const [lobby, setLobby] = useState<LobbySnapshot | null>(null);
   const [game, setGame] = useState<GameSnapshot | null>(null);
+  const [table, setTable] = useState<TableSnapshot | null>(null);
   const [lobbyError, setLobbyError] = useState<string | null>(null);
   const [gameError, setGameError] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -377,6 +398,20 @@ export function App() {
     function handleConnect() {
       setConnectionState("connected");
       setConnectionError(null);
+
+      // A device that hosts a table screen goes back to being that screen.
+      const savedTable = window.localStorage.getItem(TABLE_CODE_STORAGE_KEY);
+
+      if (savedTable) {
+        socket.emit("table:resume", { sessionId, code: savedTable }, (result) => {
+          if (result.ok) {
+            setTable(result.table);
+          } else {
+            window.localStorage.removeItem(TABLE_CODE_STORAGE_KEY);
+          }
+        });
+        return;
+      }
 
       // A new socket has no game attached on the server, so rejoin the last game
       // this session was in. Covers dropped connections and page reloads.
@@ -425,6 +460,7 @@ export function App() {
     }
 
     socket.on("game:updated", handleGameUpdate);
+    socket.on("table:updated", setTable);
     socket.connect();
 
     return () => {
@@ -433,6 +469,7 @@ export function App() {
       socket.off("connect_error", handleConnectError);
       socket.off("lobby:updated", setLobby);
       socket.off("game:updated", handleGameUpdate);
+      socket.off("table:updated", setTable);
       socket.disconnect();
     };
   }, [socket, sessionId]);
@@ -447,6 +484,38 @@ export function App() {
       window.localStorage.setItem(GAME_CODE_STORAGE_KEY, activeGameCode);
     }
   }, [activeGameCode, gameFinished]);
+
+  const tableCode = table?.code ?? null;
+
+  useEffect(() => {
+    if (tableCode) {
+      window.localStorage.setItem(TABLE_CODE_STORAGE_KEY, tableCode);
+    }
+  }, [tableCode]);
+
+  function handleTableResult(result: TableActionResult) {
+    if (result.ok) {
+      setTable(result.table);
+      setGameError(null);
+      return true;
+    }
+
+    setGameError(result.error);
+    return false;
+  }
+
+  function createTable() {
+    setGameError(null);
+    socket.emit("table:create", { sessionId }, handleTableResult);
+  }
+
+  const tableActions = {
+    saveMessage: (message: string) =>
+      new Promise<boolean>((resolve) =>
+        socket.emit("table:message", { message }, (result) => resolve(handleTableResult(result))),
+      ),
+    start: () => socket.emit("table:start", handleTableResult),
+  };
 
   function createLobby() {
     setLobbyError(null);
@@ -546,8 +615,9 @@ export function App() {
     (player) => player.id === lobby.currentPlayerId,
   );
   const isLobbyHost = currentPlayer?.host ?? false;
-  const joinUrl = lobby
-    ? `${window.location.origin}?code=${encodeURIComponent(lobby.code)}`
+  const inviteCode = table?.status === "lobby" ? table.code : lobby?.code ?? null;
+  const joinUrl = inviteCode
+    ? `${window.location.origin}?code=${encodeURIComponent(inviteCode)}`
     : null;
 
   useEffect(() => {
@@ -558,15 +628,34 @@ export function App() {
 
     void QRCode.toDataURL(joinUrl, {
       margin: 1,
-      width: 180,
+      width: table ? 360 : 180,
       color: {
         dark: "#15110a",
         light: "#f5efe4",
       },
     }).then(setQrCodeUrl);
-  }, [joinUrl]);
+  }, [joinUrl, table !== null]);
 
   const rules = isRulesOpen ? <RulesModal onClose={() => setIsRulesOpen(false)} /> : null;
+
+  if (table) {
+    return (
+      <main className="table-shell">
+        <TableScreen
+          connected={connectionState === "connected"}
+          error={gameError}
+          joinUrl={joinUrl ?? window.location.origin}
+          onNewGame={createTable}
+          onOpenRules={() => setIsRulesOpen(true)}
+          onSaveMessage={tableActions.saveMessage}
+          onStart={tableActions.start}
+          qrCodeUrl={qrCodeUrl}
+          table={table}
+        />
+        {rules}
+      </main>
+    );
+  }
 
   if (game) {
     return (
@@ -592,6 +681,7 @@ export function App() {
             connectionError={connectionError}
             connectionState={connectionState}
             createLobby={createLobby}
+            createTable={createTable}
             currentPlayer={currentPlayer}
             gameError={gameError}
             isLobbyHost={isLobbyHost}

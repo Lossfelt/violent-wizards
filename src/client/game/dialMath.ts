@@ -4,13 +4,16 @@ import { FREQUENCY_COUNT, calculateDamage, normalizeFrequency } from "../../shar
 export type Opponent = GameSnapshot["opponents"][number];
 export type Freshness = "fresh" | "aging" | "stale" | "unknown";
 
-// One identity colour per opponent, in the order the server lists them.
-const OPPONENT_COLORS = ["#5ee0c2", "#c79bff", "#ff9f5a", "#7fb2ff", "#ff7a9c", "#a6e36a", "#e3c26a"];
-export const MY_COLOR = "#f5d27a";
+// One identity colour per seat (join order), so a wizard has the same colour on every screen.
+const SEAT_COLORS = ["#f5d27a", "#5ee0c2", "#c79bff", "#ff9f5a", "#7fb2ff", "#ff7a9c", "#a6e36a", "#e3c26a"];
+
+export function seatColor(seat: number) {
+  return SEAT_COLORS[Math.max(0, seat) % SEAT_COLORS.length]!;
+}
 
 export function opponentColor(game: GameSnapshot, opponentId: string) {
-  const index = game.opponents.findIndex((opponent) => opponent.id === opponentId);
-  return OPPONENT_COLORS[Math.max(0, index) % OPPONENT_COLORS.length]!;
+  const opponent = game.opponents.find((candidate) => candidate.id === opponentId);
+  return seatColor(opponent?.seat ?? 0);
 }
 
 export const ECHO_COLOR: Record<EchoBand, string> = {
@@ -107,9 +110,4 @@ export function pointerAngle(event: { clientX: number; clientY: number }, elemen
   const dx = event.clientX - (box.left + box.width / 2);
   const dy = event.clientY - (box.top + box.height / 2);
   return normalizeFrequency((Math.atan2(dy, dx) * 180) / Math.PI + 90);
-}
-
-export function roundsAgo(game: GameSnapshot, round: number) {
-  const age = game.roundNumber - round;
-  return age <= 0 ? "this round" : age === 1 ? "last round" : `${age} rounds ago`;
 }

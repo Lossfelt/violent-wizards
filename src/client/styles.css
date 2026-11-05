@@ -758,3 +758,30 @@ h1 {
   }
 }
 
+
+/* Table screen offer on the start page, and the host's message in the phone lobby */
+
+.table-offer {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border-muted);
+  padding-top: 16px;
+}
+
+.table-offer p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.host-message {
+  margin: 0;
+  border-left: 4px solid var(--gold);
+  border-radius: 4px;
+  padding: 10px 14px;
+  background: rgba(214, 168, 71, 0.1);
+  font: 400 1.15rem / 1.4 Georgia, serif;
+  white-space: pre-wrap;
+}

@@ -1,0 +1,249 @@
+/* The shared table screen. Built for a TV or laptop across the room: big type, landscape. */
+
+.table-screen {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 20px clamp(16px, 4vw, 56px) 40px;
+  color: var(--text);
+}
+
+.table-screen button {
+  min-height: 48px;
+  border: 1px solid var(--border-muted);
+  border-radius: 12px;
+  padding: 0 20px;
+  color: var(--text);
+  background: rgba(245, 232, 202, 0.06);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.table-screen button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.table-screen .table-primary {
+  min-height: 60px;
+  border-color: var(--gold-2);
+  color: #171009;
+  background: linear-gradient(180deg, var(--gold-2), var(--gold));
+  font-size: 1.15rem;
+}
+
+.table-screen .table-quiet { color: var(--muted); }
+
+.table-top {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--faint);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.table-top > span:first-child { margin-right: auto; }
+
+.table-screen .table-icon-button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  min-height: 42px;
+  padding: 0;
+}
+
+.table-row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; }
+
+.table-error {
+  margin: 16px 0 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #ffd8d2;
+  background: rgba(95, 22, 24, 0.7);
+}
+
+/* Lobby */
+
+.table-lobby {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+  grid-template-areas:
+    "invite join"
+    "roster join";
+  gap: clamp(20px, 3vw, 40px);
+  margin-top: clamp(16px, 4vh, 48px);
+}
+
+.table-invite { grid-area: invite; }
+.table-join { grid-area: join; }
+.table-roster { grid-area: roster; }
+
+.table-kicker {
+  margin: 0;
+  color: var(--teal);
+  font-size: clamp(0.85rem, 1.4vw, 1.1rem);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.table-invite h1 {
+  margin: 8px 0 24px;
+  color: var(--gold-2);
+  font: 400 clamp(2.8rem, 7vw, 6rem) / 1 Georgia, serif;
+}
+
+.table-message p {
+  margin: 0 0 14px;
+  border-left: 4px solid var(--gold);
+  padding: 4px 0 4px 20px;
+  font: 400 clamp(1.4rem, 3vw, 2.4rem) / 1.3 Georgia, serif;
+  white-space: pre-wrap;
+}
+
+.table-message .table-message-empty { border-color: var(--border-muted); color: var(--faint); }
+
+.table-message-form { display: grid; gap: 12px; }
+
+.table-message-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  color: var(--text);
+  background: rgba(3, 5, 5, 0.8);
+  font: 400 1.4rem / 1.35 Georgia, serif;
+  resize: vertical;
+}
+
+.table-join {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 24px;
+  background: rgba(12, 15, 15, 0.9);
+  text-align: center;
+}
+
+.table-join img { width: min(100%, 320px); border-radius: 12px; }
+.table-join p { margin: 0; color: var(--muted); font-size: 1.05rem; }
+.table-join code { color: var(--text); font-size: 1.05rem; word-break: break-all; }
+.table-code { color: var(--gold-2); font: 400 2.6rem Georgia, serif; letter-spacing: 0.1em; }
+
+.table-join .table-warning {
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #ffd8d2;
+  background: rgba(95, 22, 24, 0.6);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.table-roster h2 { margin: 0 0 14px; color: var(--muted); font-size: 1.2rem; }
+
+.table-roster ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+}
+
+.table-roster li {
+  border: 3px solid;
+  border-radius: 999px;
+  padding: 10px 22px;
+  font: 400 clamp(1.2rem, 2.2vw, 1.7rem) Georgia, serif;
+}
+
+.table-roster li[data-online="false"] { opacity: 0.45; }
+.table-roster .table-primary { width: min(100%, 420px); }
+
+/* During the game */
+
+.table-game {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  grid-template-areas:
+    "status status"
+    "board side";
+  gap: clamp(16px, 3vw, 36px);
+  margin-top: 16px;
+}
+
+.table-status { grid-area: status; display: grid; gap: 10px; }
+.table-board { grid-area: board; display: grid; place-items: center; }
+.table-side { grid-area: side; display: grid; align-content: start; gap: 12px; }
+
+.table-round { color: var(--gold-2); font: 400 clamp(2rem, 4vw, 3.4rem) Georgia, serif; }
+
+.table-status ol {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: clamp(0.9rem, 1.4vw, 1.15rem);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.table-status li { padding: 6px 16px; border-radius: 999px; color: var(--faint); }
+.table-status li[data-on="true"] { color: #171009; background: var(--gold-2); }
+.table-status p { margin: 0; color: var(--text); font-size: clamp(1.1rem, 2vw, 1.6rem); }
+
+.table-board .feud-table[data-size="full"] {
+  width: auto;
+  max-width: 100%;
+  height: min(62vh, 600px);
+}
+.table-board .feud-seat-name { font-size: 12px; }
+
+.table-side h2 {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.table-players,
+.table-battles { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+
+.table-players li,
+.table-battles li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid var(--border-muted);
+  padding: 8px 2px;
+  font-size: 1.15rem;
+}
+
+.table-players i { width: 14px; height: 14px; border-radius: 999px; }
+.table-players span,
+.table-battles span { margin-left: auto; color: var(--muted); font-size: 0.95rem; }
+.table-players li[data-alive="false"] { opacity: 0.45; text-decoration: line-through; }
+.table-battles li[data-finished="false"] span { color: #f06e63; font-weight: 800; }
+.table-side .feud-list { width: 100%; }
+
+@media (max-width: 860px) {
+  .table-lobby,
+  .table-game {
+    grid-template-columns: 1fr;
+    grid-template-areas: none;
+  }
+
+  .table-invite,
+  .table-join,
+  .table-roster,
+  .table-status,
+  .table-board,
+  .table-side { grid-area: auto; }
+}

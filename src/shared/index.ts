@@ -84,10 +84,14 @@ export type LobbyPlayer = {
   connected: boolean;
 };
 
+// A game is hosted either by one of the players or by a shared table screen. With a table
+// screen no player is host: the screen starts the game and rounds advance on a timer.
 export type LobbySnapshot = {
   code: string;
   status: "lobby";
-  hostPlayerId: string;
+  hostPlayerId: string | null;
+  tableHosted: boolean;
+  message: string;
   currentPlayerId: string;
   players: LobbyPlayer[];
 };
@@ -95,6 +99,8 @@ export type LobbySnapshot = {
 export type CurrentPlayerSnapshot = {
   id: string;
   name: string;
+  // Join order. Picks the player's colour so it is the same on every screen.
+  seat: number;
   health: number;
   alive: boolean;
   shieldFrequency: number;
@@ -107,6 +113,7 @@ export type CurrentPlayerSnapshot = {
 export type OpponentSnapshot = {
   id: string;
   name: string;
+  seat: number;
   alive: boolean;
   host: boolean;
   connected: boolean;
@@ -180,7 +187,10 @@ export type GameSnapshot = {
   code: string;
   status: Exclude<GameStatus, "lobby">;
   roundNumber: number;
-  hostPlayerId: string;
+  hostPlayerId: string | null;
+  tableHosted: boolean;
+  // Time left before the next round starts by itself, or null when someone has to start it.
+  nextRoundInMs: number | null;
   currentPlayer: CurrentPlayerSnapshot;
   opponents: OpponentSnapshot[];
   shareableInsights: ShareableInsightSnapshot[];
@@ -196,6 +206,40 @@ export type GameSnapshot = {
   draw: boolean;
 };
 
+// What the shared table screen may show: nothing secret, only what every wizard can sense.
+export type TablePlayer = {
+  id: string;
+  name: string;
+  seat: number;
+  connected: boolean;
+  alive: boolean;
+  // Done with the current phase: prepared, declared, or finished fighting.
+  ready: boolean;
+};
+
+export type TableBattle = RoundBattlePreview & {
+  exchangeCount: number;
+  finished: boolean;
+};
+
+export type TableSnapshot = {
+  code: string;
+  status: GameStatus;
+  message: string;
+  roundNumber: number;
+  players: TablePlayer[];
+  battles: TableBattle[];
+  battleHistory: PublicBattleHistoryEntry[];
+  shieldRotations: PublicShieldRotation[];
+  winnerPlayerId: string | null;
+  draw: boolean;
+  nextRoundInMs: number | null;
+};
+
+export type TableActionResult =
+  | { ok: true; table: TableSnapshot }
+  | { ok: false; error: string };
+
 export type GameActionResult =
   | { ok: true; game: GameSnapshot }
   | { ok: false; error: string };
@@ -210,6 +254,7 @@ export type ServerToClientEvents = {
   "server:status": (payload: ServerStatus) => void;
   "lobby:updated": (payload: LobbySnapshot) => void;
   "game:updated": (payload: GameSnapshot) => void;
+  "table:updated": (payload: TableSnapshot) => void;
 };
 
 export type ClientToServerEvents = {
@@ -244,6 +289,19 @@ export type ClientToServerEvents = {
     payload: { receiverPlayerId: string; targetPlayerId: string },
     acknowledge: (result: GameActionResult) => void,
   ) => void;
+  "table:create": (
+    payload: { sessionId: string },
+    acknowledge: (result: TableActionResult) => void,
+  ) => void;
+  "table:resume": (
+    payload: { sessionId: string; code: string },
+    acknowledge: (result: TableActionResult) => void,
+  ) => void;
+  "table:message": (
+    payload: { message: string },
+    acknowledge: (result: TableActionResult) => void,
+  ) => void;
+  "table:start": (acknowledge: (result: TableActionResult) => void) => void;
 };
 
 export type InterServerEvents = Record<string, never>;
@@ -253,4 +311,6 @@ export type SocketData = {
   gameCode?: string;
   playerId?: string;
   sessionId?: string;
+  // Set when this socket is a game's shared table screen rather than a player.
+  tableCode?: string;
 };

@@ -23,6 +23,8 @@ import type {
   ServerStatus,
   ServerToClientEvents,
   SocketData,
+  TableActionResult,
+  TableSnapshot,
 } from "../shared/index.js";
 import {
   SHIELD_DRIFT_MAX,
@@ -83,7 +85,11 @@ type ActiveBattle = {
 type LobbyGame = {
   code: string;
   status: GameStatus;
-  hostPlayerId: string;
+  // Null when a shared table screen hosts the game instead of a player.
+  hostPlayerId: string | null;
+  tableSessionId: string | null;
+  message: string;
+  nextRoundAt: number | null;
   playersById: Map<string, LobbyPlayer>;
   roundNumber: number;
   gamePlayersById: Map<string, Player>;
@@ -138,8 +144,69 @@ function createLobbySnapshot(game: LobbyGame, currentPlayerId: string): LobbySna
     code: game.code,
     status: "lobby",
     hostPlayerId: game.hostPlayerId,
+    tableHosted: isTableHosted(game),
+    message: game.message,
     currentPlayerId,
     players: [...game.playersById.values()],
+  };
+}
+
+function isTableHosted(game: LobbyGame) {
+  return game.tableSessionId !== null;
+}
+
+function seatOf(game: LobbyGame, playerId: string) {
+  return [...game.playersById.keys()].indexOf(playerId);
+}
+
+function nextRoundInMs(game: LobbyGame) {
+  return game.nextRoundAt === null ? null : Math.max(0, game.nextRoundAt - Date.now());
+}
+
+function isReadyForPhase(game: LobbyGame, playerId: string) {
+  if (game.status === "round_prepare") return game.discardSubmittedPlayerIds.has(playerId);
+  if (game.status === "attack_declaration") return game.attackSubmittedPlayerIds.has(playerId);
+  if (game.status === "battle_resolution") {
+    return ![...game.activeBattlesById.values()].some(
+      (battle) =>
+        battle.status === "active" && (battle.playerAId === playerId || battle.playerBId === playerId),
+    );
+  }
+  return false;
+}
+
+// Only what every wizard can sense: who is in the game, who fights whom, who has fallen.
+function createTableSnapshot(game: LobbyGame): TableSnapshot {
+  const showBattles = game.status === "battle_resolution" || game.status === "round_cleanup";
+
+  return {
+    code: game.code,
+    status: game.status,
+    message: game.message,
+    roundNumber: game.roundNumber,
+    players: [...game.playersById.values()].map((lobbyPlayer, seat) => {
+      const alive = game.gamePlayersById.get(lobbyPlayer.id)?.alive ?? true;
+      return {
+        id: lobbyPlayer.id,
+        name: lobbyPlayer.name,
+        seat,
+        connected: lobbyPlayer.connected,
+        alive,
+        ready: alive && isReadyForPhase(game, lobbyPlayer.id),
+      };
+    }),
+    battles: showBattles
+      ? [...game.activeBattlesById.values()].map((battle) => ({
+          ...createRoundBattlePreview(game, battle),
+          exchangeCount: battle.exchanges.length,
+          finished: battle.status === "finished",
+        }))
+      : [],
+    battleHistory: game.battleHistory,
+    shieldRotations: game.shieldRotations,
+    winnerPlayerId: game.winnerPlayerId,
+    draw: game.draw,
+    nextRoundInMs: nextRoundInMs(game),
   };
 }
 
@@ -243,9 +310,12 @@ function createGameSnapshot(game: LobbyGame, currentPlayerId: string): GameSnaps
     status: game.status,
     roundNumber: game.roundNumber,
     hostPlayerId: game.hostPlayerId,
+    tableHosted: isTableHosted(game),
+    nextRoundInMs: nextRoundInMs(game),
     currentPlayer: {
       id: currentPlayer.id,
       name: currentPlayer.name,
+      seat: seatOf(game, currentPlayer.id),
       health:
         findCurrentBattle(game, currentPlayerId)?.healthByPlayerId[currentPlayerId] ??
         currentPlayer.health,
@@ -261,6 +331,7 @@ function createGameSnapshot(game: LobbyGame, currentPlayerId: string): GameSnaps
       .map((player) => ({
         id: player.id,
         name: player.name,
+        seat: seatOf(game, player.id),
         alive: game.gamePlayersById.get(player.id)?.alive ?? true,
         host: player.host,
         connected: player.connected,
@@ -300,6 +371,10 @@ function socketsForPlayer(playerId: string): GameSocket[] {
 }
 
 function emitGameUpdate(game: LobbyGame) {
+  if (isTableHosted(game)) {
+    io.to(`table:${game.code}`).emit("table:updated", createTableSnapshot(game));
+  }
+
   for (const player of game.playersById.values()) {
     for (const socket of socketsForPlayer(player.id)) {
       if (game.status === "lobby") {
@@ -342,6 +417,9 @@ function createGameForPlayer(
     code,
     status: "lobby",
     hostPlayerId: player.id,
+    tableSessionId: null,
+    message: "",
+    nextRoundAt: null,
     playersById: new Map([[player.id, player]]),
     roundNumber: 0,
     gamePlayersById: new Map(),
@@ -472,6 +550,11 @@ function startGame(socket: GameSocket): GameActionResult {
     return { ok: false, error: "At least two players are required." };
   }
 
+  beginGame(game);
+  return { ok: true, game: createGameSnapshot(game, playerId) };
+}
+
+function beginGame(game: LobbyGame) {
   game.status = "round_prepare";
   game.roundNumber = 1;
   game.gamePlayersById = new Map(
@@ -499,7 +582,6 @@ function startGame(socket: GameSocket): GameActionResult {
   }
 
   emitGameUpdate(game);
-  return { ok: true, game: createGameSnapshot(game, playerId) };
 }
 
 function livingPlayerIds(game: LobbyGame): string[] {
@@ -756,6 +838,12 @@ function startNextRound(socket: GameSocket): GameActionResult {
     return { ok: false, error: "Only the host can start the next round." };
   }
 
+  advanceRound(game);
+  return { ok: true, game: createGameSnapshot(game, playerId) };
+}
+
+function advanceRound(game: LobbyGame) {
+  clearRoundTimer(game);
   game.roundNumber += 1;
   game.status = "round_prepare";
   driftShields(game);
@@ -778,7 +866,6 @@ function startNextRound(socket: GameSocket): GameActionResult {
   }
 
   emitGameUpdate(game);
-  return { ok: true, game: createGameSnapshot(game, playerId) };
 }
 
 function commitFinishedRoundIfReady(game: LobbyGame) {
@@ -820,6 +907,7 @@ function commitFinishedRoundIfReady(game: LobbyGame) {
   game.winnerPlayerId = livingIds.length === 1 ? livingIds[0]! : null;
   game.draw = livingIds.length === 0;
   game.status = livingIds.length <= 1 ? "finished" : "round_cleanup";
+  scheduleNextRound(game);
 }
 
 function submitBattleAction(
@@ -1067,11 +1155,128 @@ function submitAttack(
 
     if (game.status === "round_cleanup") {
       applyShieldRotations(game);
+      scheduleNextRound(game);
     }
   }
 
   emitGameUpdate(game);
   return { ok: true, game: createGameSnapshot(game, playerId) };
+}
+
+// A table-hosted game has nobody at the screen between rounds, so rounds advance on a timer.
+const ROUND_BREAK_MS = 12_000;
+const MESSAGE_MAX_LENGTH = 280;
+const roundTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function clearRoundTimer(game: LobbyGame) {
+  const timer = roundTimers.get(game.code);
+
+  if (timer) {
+    clearTimeout(timer);
+    roundTimers.delete(game.code);
+  }
+
+  game.nextRoundAt = null;
+}
+
+function scheduleNextRound(game: LobbyGame) {
+  if (!isTableHosted(game) || game.status !== "round_cleanup") {
+    return;
+  }
+
+  clearRoundTimer(game);
+  game.nextRoundAt = Date.now() + ROUND_BREAK_MS;
+  roundTimers.set(
+    game.code,
+    setTimeout(() => {
+      if (game.status === "round_cleanup") {
+        advanceRound(game);
+      }
+    }, ROUND_BREAK_MS),
+  );
+}
+
+function getTableGame(socket: GameSocket) {
+  return socket.data.tableCode ? gamesByCode.get(socket.data.tableCode) : undefined;
+}
+
+function attachSocketToTable(game: LobbyGame, socket: GameSocket) {
+  socket.data.tableCode = game.code;
+  socket.data.sessionId = game.tableSessionId ?? undefined;
+  socket.join(`table:${game.code}`);
+}
+
+function createTableGame(socket: GameSocket, payload: { sessionId: string }): TableActionResult {
+  const game: LobbyGame = {
+    code: createLobbyCode(),
+    status: "lobby",
+    hostPlayerId: null,
+    tableSessionId: payload.sessionId,
+    message: "",
+    nextRoundAt: null,
+    playersById: new Map(),
+    roundNumber: 0,
+    gamePlayersById: new Map(),
+    discardSubmittedPlayerIds: new Set(),
+    attackSubmittedPlayerIds: new Set(),
+    pendingBattles: [],
+    activeBattlesById: new Map(),
+    unmatchedAttackerIds: [],
+    winnerPlayerId: null,
+    draw: false,
+    battleHistory: [],
+    shieldRotations: [],
+  };
+
+  gamesByCode.set(game.code, game);
+  attachSocketToTable(game, socket);
+  return { ok: true, table: createTableSnapshot(game) };
+}
+
+function resumeTable(socket: GameSocket, payload: { sessionId: string; code: string }): TableActionResult {
+  const game = gamesByCode.get(normalizeLobbyCode(payload.code));
+
+  if (!game || game.tableSessionId !== payload.sessionId) {
+    return { ok: false, error: "That table is no longer available." };
+  }
+
+  attachSocketToTable(game, socket);
+  return { ok: true, table: createTableSnapshot(game) };
+}
+
+function setTableMessage(socket: GameSocket, payload: { message: string }): TableActionResult {
+  const game = getTableGame(socket);
+
+  if (!game) {
+    return { ok: false, error: "This screen is not hosting a game." };
+  }
+
+  if (game.status !== "lobby") {
+    return { ok: false, error: "The message can only be changed before the game starts." };
+  }
+
+  game.message = String(payload.message ?? "").trim().slice(0, MESSAGE_MAX_LENGTH);
+  emitGameUpdate(game);
+  return { ok: true, table: createTableSnapshot(game) };
+}
+
+function startTableGame(socket: GameSocket): TableActionResult {
+  const game = getTableGame(socket);
+
+  if (!game) {
+    return { ok: false, error: "This screen is not hosting a game." };
+  }
+
+  if (game.status !== "lobby") {
+    return { ok: false, error: "The game has already started." };
+  }
+
+  if (game.playersById.size < 2) {
+    return { ok: false, error: "At least two players are required." };
+  }
+
+  beginGame(game);
+  return { ok: true, table: createTableSnapshot(game) };
 }
 
 function getServerStatus(): ServerStatus {
@@ -1132,6 +1337,22 @@ io.on("connection", (socket) => {
 
   socket.on("round:next", (acknowledge) => {
     acknowledge(startNextRound(socket));
+  });
+
+  socket.on("table:create", (payload, acknowledge) => {
+    acknowledge(createTableGame(socket, payload));
+  });
+
+  socket.on("table:resume", (payload, acknowledge) => {
+    acknowledge(resumeTable(socket, payload));
+  });
+
+  socket.on("table:message", (payload, acknowledge) => {
+    acknowledge(setTableMessage(socket, payload));
+  });
+
+  socket.on("table:start", (acknowledge) => {
+    acknowledge(startTableGame(socket));
   });
 
   socket.on("insight:share", (payload, acknowledge) => {

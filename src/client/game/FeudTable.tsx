@@ -1,13 +1,88 @@
-import type { GameSnapshot } from "../../shared";
-import { MY_COLOR, opponentColor, polar, roundsAgo } from "./dialMath";
+import type {
+  GameSnapshot,
+  PublicBattleHistoryEntry,
+  PublicShieldRotation,
+  RoundBattlePreview,
+  TableSnapshot,
+} from "../../shared";
+import { polar, seatColor } from "./dialMath";
+
+export type FeudPerson = {
+  id: string;
+  // The name battle history refers to, and what to print for it ("You" on your own phone).
+  name: string;
+  label: string;
+  alive: boolean;
+  color: string;
+};
+
+// Everything the table and list need, from either a player's game or the shared table screen.
+export type FeudData = {
+  people: FeudPerson[];
+  battleHistory: PublicBattleHistoryEntry[];
+  liveBattles: RoundBattlePreview[];
+  rotations: PublicShieldRotation[];
+  roundNumber: number;
+  completedRounds: number;
+};
+
+function completedRounds(status: string, roundNumber: number) {
+  return status === "round_cleanup" || status === "finished" ? roundNumber : Math.max(0, roundNumber - 1);
+}
+
+export function feudDataFromGame(game: GameSnapshot): FeudData {
+  const me = game.currentPlayer;
+  return {
+    people: [
+      { id: me.id, name: me.name, label: "You", alive: me.alive, color: seatColor(me.seat) },
+      ...game.opponents.map((opponent) => ({
+        id: opponent.id,
+        name: opponent.name,
+        label: opponent.name,
+        alive: opponent.alive,
+        color: seatColor(opponent.seat),
+      })),
+    ].sort((a, b) => seatOf(game, a.id) - seatOf(game, b.id)),
+    battleHistory: game.battleHistory,
+    liveBattles: game.status === "battle_resolution" ? game.pendingBattles : [],
+    rotations: game.shieldRotations.map((rotation) =>
+      rotation.playerId === me.id ? { ...rotation, playerName: "You" } : rotation,
+    ),
+    roundNumber: game.roundNumber,
+    completedRounds: completedRounds(game.status, game.roundNumber),
+  };
+}
+
+function seatOf(game: GameSnapshot, playerId: string) {
+  if (playerId === game.currentPlayer.id) return game.currentPlayer.seat;
+  return game.opponents.find((opponent) => opponent.id === playerId)?.seat ?? 0;
+}
+
+export function feudDataFromTable(table: TableSnapshot): FeudData {
+  return {
+    people: table.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      label: player.name,
+      alive: player.alive,
+      color: seatColor(player.seat),
+    })),
+    battleHistory: table.battleHistory,
+    liveBattles:
+      table.status === "battle_resolution" ? table.battles.filter((battle) => !battle.finished) : [],
+    rotations: table.shieldRotations,
+    roundNumber: table.roundNumber,
+    completedRounds: completedRounds(table.status, table.roundNumber),
+  };
+}
 
 type Feud = { a: string; b: string; count: number; lastRound: number };
 
 // Several fights between the same two wizards become one line.
-function feudsOf(game: GameSnapshot): Feud[] {
+function feudsOf(data: FeudData): Feud[] {
   const byPair = new Map<string, Feud>();
 
-  for (const entry of game.battleHistory) {
+  for (const entry of data.battleHistory) {
     const [a, b] = [entry.playerAName, entry.playerBName].sort();
     const key = `${a}|${b}`;
     const feud = byPair.get(key) ?? { a: a!, b: b!, count: 0, lastRound: 0 };
@@ -19,49 +94,38 @@ function feudsOf(game: GameSnapshot): Feud[] {
   return [...byPair.values()].sort((x, y) => y.lastRound - x.lastRound);
 }
 
-function seatsOf(game: GameSnapshot, cx: number, cy: number, radius: number) {
-  const me = game.currentPlayer;
-  const people = [
-    { id: me.id, name: me.name, label: "You", alive: me.alive, color: MY_COLOR },
-    ...game.opponents.map((opponent) => ({
-      id: opponent.id,
-      name: opponent.name,
-      label: opponent.name,
-      alive: opponent.alive,
-      color: opponentColor(game, opponent.id),
-    })),
-  ];
-
-  return people.map((person, index) => ({
-    ...person,
-    ...polar(cx, cy, radius, 180 + (index * 360) / people.length),
-  }));
+export function roundsAgo(roundNumber: number, round: number) {
+  const age = roundNumber - round;
+  return age <= 0 ? "this round" : age === 1 ? "last round" : `${age} rounds ago`;
 }
 
 type TableProps = {
-  game: GameSnapshot;
+  data: FeudData;
   size: "mini" | "full";
   focusId: string | null;
   showNumbers?: boolean;
-  onSelect?: (opponentId: string) => void;
+  onSelect?: (playerId: string) => void;
 };
 
 // Who has fought whom, drawn as a round table. Lines fade with age; live fights pulse.
-export function FeudTable({ game, size, focusId, showNumbers = false, onSelect }: TableProps) {
+export function FeudTable({ data, size, focusId, showNumbers = false, onSelect }: TableProps) {
   const full = size === "full";
   const w = full ? 320 : 112;
   const h = full ? 280 : 96;
-  const seats = seatsOf(game, w / 2, h / 2, full ? 104 : 34);
+  const seats = data.people.map((person, index) => ({
+    ...person,
+    ...polar(w / 2, h / 2, full ? 104 : 34, 180 + (index * 360) / Math.max(1, data.people.length)),
+  }));
   const byName = new Map(seats.map((seat) => [seat.name, seat]));
   const byId = new Map(seats.map((seat) => [seat.id, seat]));
 
   return (
     <svg className="feud-table" data-size={size} role="group" aria-label="Who has fought whom" viewBox={`0 0 ${w} ${h}`}>
-      {feudsOf(game).map((feud) => {
+      {feudsOf(data).map((feud) => {
         const a = byName.get(feud.a);
         const b = byName.get(feud.b);
         if (!a || !b) return null;
-        const age = game.roundNumber - feud.lastRound;
+        const age = data.roundNumber - feud.lastRound;
         return (
           <g key={`${feud.a}|${feud.b}`}>
             <line
@@ -81,16 +145,14 @@ export function FeudTable({ game, size, focusId, showNumbers = false, onSelect }
           </g>
         );
       })}
-      {game.status === "battle_resolution"
-        ? game.pendingBattles.map((entry) => {
-            const a = byId.get(entry.playerAId);
-            const b = byId.get(entry.playerBId);
-            if (!a || !b) return null;
-            return <line className="feud-line-live" key={entry.id} x1={a.x} x2={b.x} y1={a.y} y2={b.y} />;
-          })
-        : null}
+      {data.liveBattles.map((entry) => {
+        const a = byId.get(entry.playerAId);
+        const b = byId.get(entry.playerBId);
+        if (!a || !b) return null;
+        return <line className="feud-line-live" key={entry.id} x1={a.x} x2={b.x} y1={a.y} y2={b.y} />;
+      })}
       {seats.map((seat) => {
-        const selectable = full && seat.id !== game.currentPlayer.id && seat.alive && onSelect;
+        const selectable = full && seat.label !== "You" && seat.alive && onSelect;
         return (
           <g
             className="feud-seat"
@@ -127,47 +189,44 @@ export function FeudTable({ game, size, focusId, showNumbers = false, onSelect }
   );
 }
 
-export function FeudList({ game }: { game: GameSnapshot }) {
-  const me = game.currentPlayer.name;
-  const name = (value: string) => (value === me ? "You" : value);
-  const completedRounds = game.status === "round_cleanup" || game.status === "finished"
-    ? game.roundNumber
-    : game.roundNumber - 1;
+export function FeudList({ data }: { data: FeudData }) {
+  const labels = new Map(data.people.map((person) => [person.name, person.label]));
+  const label = (name: string) => labels.get(name) ?? name;
+  const nameOfId = new Map(data.people.map((person) => [person.id, person.label]));
 
   return (
     <ul className="feud-list">
-      {game.status === "battle_resolution"
-        ? game.pendingBattles.map((entry) => (
-            <li data-live="true" key={entry.id}>
-              <b>
-                {name(entry.playerAName)} vs {name(entry.playerBName)}
-              </b>
-              <span>fighting now</span>
-            </li>
-          ))
-        : null}
-      {feudsOf(game).map((feud) => {
-        const [first, second] = feud.b === me ? [feud.b, feud.a] : [feud.a, feud.b];
+      {data.liveBattles.map((entry) => (
+        <li data-live="true" key={entry.id}>
+          <b>
+            {nameOfId.get(entry.playerAId) ?? entry.playerAName} vs{" "}
+            {nameOfId.get(entry.playerBId) ?? entry.playerBName}
+          </b>
+          <span>fighting now</span>
+        </li>
+      ))}
+      {feudsOf(data).map((feud) => {
+        const [first, second] = label(feud.b) === "You" ? [feud.b, feud.a] : [feud.a, feud.b];
         return (
           <li key={`${feud.a}|${feud.b}`}>
             <b>
-              {name(first)} vs {name(second)}
+              {label(first)} vs {label(second)}
             </b>
             <span>
-              {feud.count} fight{feud.count === 1 ? "" : "s"} · {roundsAgo(game, feud.lastRound)}
+              {feud.count} fight{feud.count === 1 ? "" : "s"} · {roundsAgo(data.roundNumber, feud.lastRound)}
             </span>
           </li>
         );
       })}
-      {game.shieldRotations.map((rotation) => (
+      {data.rotations.map((rotation) => (
         <li data-rotation="true" key={`${rotation.playerId}-${rotation.roundNumber}`}>
-          <b>{rotation.playerId === game.currentPlayer.id ? "You" : rotation.playerName} rotated</b>
-          <span>{roundsAgo(game, rotation.roundNumber)}</span>
+          <b>{rotation.playerName} rotated</b>
+          <span>{roundsAgo(data.roundNumber, rotation.roundNumber)}</span>
         </li>
       ))}
       <li className="feud-total">
-        {game.battleHistory.length} fight{game.battleHistory.length === 1 ? "" : "s"} in{" "}
-        {completedRounds} round{completedRounds === 1 ? "" : "s"}
+        {data.battleHistory.length} fight{data.battleHistory.length === 1 ? "" : "s"} in{" "}
+        {data.completedRounds} round{data.completedRounds === 1 ? "" : "s"}
       </li>
     </ul>
   );
