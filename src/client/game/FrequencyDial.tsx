@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import type { EchoBand, FrequencyArc } from "../../shared";
 import { BrassRing, StarSprite } from "./artAssets";
 import { ECHO_COLOR, arcBand, pointerAngle, polar } from "./dialMath";
@@ -86,6 +86,57 @@ function laneLabelAngle(widest: FrequencyArc, radius: number) {
   return visible.end + labelDegrees;
 }
 
+type Shot = { key: number; frequency: number; echo: EchoBand; fromRadius: number };
+
+// Watches the battle's shots and returns the newest one for a moment, so it can fly from its
+// Mado to the ring. Shots already on the dial when it mounts (a reload) are not replayed.
+function useNewShot(marks: Props["marks"], mados: DialMado[], radii: Map<number, number>) {
+  const seen = useRef(marks.length);
+  const [shot, setShot] = useState<Shot | null>(null);
+
+  useEffect(() => {
+    const isNew = marks.length > seen.current;
+    seen.current = marks.length;
+    if (!isNew) return;
+
+    const mark = marks[marks.length - 1]!;
+    const mado = mados.find((m) => m.state === "used" && Math.round(m.frequency) === Math.round(mark.frequency));
+    setShot({ key: marks.length, frequency: mark.frequency, echo: mark.echo, fromRadius: mado ? (radii.get(mado.slot) ?? ORBIT) : ORBIT });
+    const timer = setTimeout(() => setShot(null), 1600);
+    return () => clearTimeout(timer);
+    // Only a new shot matters; Mado positions are read at that moment.
+  }, [marks.length]);
+
+  return shot;
+}
+
+const ECHO_WORD: Record<EchoBand, string> = { glowing: "Glowing", warm: "Warm", lukewarm: "Lukewarm", cold: "Cold" };
+
+// The fired star flies out to the ring, flares in the colour of its echo and names it.
+function ShotFlight({ shot }: { shot: Shot }) {
+  const to = polar(C, C, R_TICK - 2, shot.frequency);
+  const from = polar(C, C, shot.fromRadius, shot.frequency);
+  const word = polar(C, C, R_TICK - 20, shot.frequency);
+  // The word grows towards the centre, so it never runs out over the brass ring.
+  const side = Math.sin((shot.frequency * Math.PI) / 180);
+  const anchor = side < -0.35 ? "start" : side > 0.35 ? "end" : "middle";
+  const colour = ECHO_COLOR[shot.echo];
+  const flight = { "--from-x": `${from.x - to.x}px`, "--from-y": `${from.y - to.y}px` } as CSSProperties;
+  return (
+    <g className="dial-shot" pointerEvents="none">
+      <g transform={`translate(${to.x} ${to.y})`}>
+        <g className="dial-shot-star" style={flight}>
+          <StarSprite cx={0} cy={0} glowRadius={12} />
+        </g>
+        <circle className="dial-shot-flare" fill={colour} filter="url(#dial-glow)" r="14" />
+      </g>
+      <text className="dial-shot-word" dominantBaseline="central" fill={colour} textAnchor={anchor} x={word.x} y={word.y}>
+        {ECHO_WORD[shot.echo]}
+      </text>
+    </g>
+  );
+}
+
 export function FrequencyDial({
   lanes,
   mados,
@@ -101,6 +152,7 @@ export function FrequencyDial({
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<Drag>(null);
   const radii = orbitRadii(mados);
+  const shot = useNewShot(marks, mados, radii);
 
   function startDrag(event: PointerEvent<SVGElement>, next: Drag) {
     drag.current = next;
@@ -204,7 +256,7 @@ export function FrequencyDial({
         const p = polar(C, C, R_TICK - 2, mark.frequency);
         const latest = index === marks.length - 1;
         return (
-          <g filter="url(#dial-glow)" key={`${index}-${mark.frequency}`}>
+          <g className={latest ? "dial-mark-latest" : undefined} filter="url(#dial-glow)" key={`${index}-${mark.frequency}`}>
             {latest ? <circle className="dial-ripple" cx={p.x} cy={p.y} r="6" stroke={ECHO_COLOR[mark.echo]} /> : null}
             <circle cx={p.x} cy={p.y} fill={ECHO_COLOR[mark.echo]} r="4" />
           </g>
@@ -276,6 +328,8 @@ export function FrequencyDial({
             );
           })()
         : null}
+
+      {shot ? <ShotFlight key={shot.key} shot={shot} /> : null}
 
       {/* The text box is wider than the inner orbit's gap, so it must not swallow taps on Mados. */}
       <foreignObject height="104" pointerEvents="none" width="150" x={C - 75} y={C - 52}>

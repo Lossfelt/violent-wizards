@@ -195,7 +195,33 @@
 .table-status .table-status-text { flex: 1 1 auto; min-width: 0; font-size: clamp(0.95rem, 1.4vw, 1.25rem); }
 .table-status .table-deadline { flex: none; white-space: nowrap; }
 .table-status ol { flex: none; }
-.table-board { grid-area: board; display: grid; place-items: center; }
+.table-board { position: relative; grid-area: board; display: grid; place-items: center; }
+
+/* "Round 3" rises over the table when a round starts, then fades back into the sky. */
+.table-round-banner {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.table-round-banner span {
+  padding: 10px 40px 26px;
+  background: url("/art/divider.webp") center bottom / 100% auto no-repeat;
+  color: var(--gold-2);
+  font: 400 clamp(2.4rem, 6vw, 4.2rem) Georgia, serif;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 18px rgba(255, 196, 92, 0.75), 0 0 46px rgba(255, 160, 60, 0.45), 0 2px 4px #000;
+  animation: table-round-banner 2800ms ease-in-out both;
+}
+
+@keyframes table-round-banner {
+  0% { opacity: 0; transform: scale(0.86); filter: blur(4px); }
+  18% { opacity: 1; transform: scale(1); filter: blur(0); }
+  72% { opacity: 1; transform: scale(1.02); filter: blur(0); }
+  100% { opacity: 0; transform: scale(1.08); filter: blur(3px); }
+}
 .table-wizards { grid-area: wizards; }
 .table-side { grid-area: side; }
 

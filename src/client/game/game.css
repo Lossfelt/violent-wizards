@@ -191,6 +191,23 @@
   animation: feud-pulse 0.9s ease-in-out infinite alternate;
 }
 
+/* A short spark that runs the length of a live fight line; the return spark runs the other way. */
+.feud-line-spark {
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 6 94;
+  filter: drop-shadow(0 0 4px #ffd679);
+  animation: feud-spark 1.6s linear infinite;
+}
+
+.feud-line-spark[data-return="true"] { animation-delay: -0.8s; }
+
+@keyframes feud-spark {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
 @keyframes feud-pulse {
   from { stroke-opacity: 0.35; }
   to { stroke-opacity: 1; }
@@ -198,7 +215,34 @@
 
 .feud-seat-ring { fill: #070d26; stroke-width: 2.5; }
 .feud-seat[data-selectable="true"] { cursor: pointer; }
+/* A seat dims slowly when its wizard falls. Transitions never run on first render, so a reload stays still. */
+.feud-seat { transition: opacity 1800ms ease-in 600ms; }
 .feud-seat[data-dead="true"] { opacity: 0.35; }
+.feud-seat[data-dead="true"] .feud-seat-initial { animation: feud-fade-in 600ms ease-out both; }
+
+.feud-fall-flare { fill: none; stroke: #fff1d0; stroke-width: 3; filter: drop-shadow(0 0 8px #ff8a3d); animation: feud-fall-flare 900ms ease-out both; }
+.feud-fall-constellation { animation: feud-fade-out 1600ms ease-in 300ms both; }
+.feud-fall-star { animation: feud-fall-star 1700ms cubic-bezier(0.5, 0, 0.8, 0.4) 250ms both; }
+
+@keyframes feud-fall-flare {
+  from { r: 18; opacity: 1; }
+  to { r: 46; opacity: 0; }
+}
+
+@keyframes feud-fall-star {
+  0% { opacity: 1; transform: translate(0, 0); }
+  100% { opacity: 0; transform: translate(14px, 70px); }
+}
+
+@keyframes feud-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes feud-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 .feud-seat[data-focus="true"] .feud-seat-ring { fill: #1c1a2e; stroke-width: 4; }
 .feud-seat-initial { fill: var(--text); font-family: Georgia, serif; font-weight: 700; pointer-events: none; }
 .feud-seat-name { fill: #ffe3a0; font: 400 11px Georgia, serif; letter-spacing: 0.04em; pointer-events: none; }
@@ -274,7 +318,8 @@
 .dial-mado[data-state="discard"] .dial-mado-hit { stroke: var(--danger); stroke-dasharray: 3 3; }
 .dial-mado[data-state="discard"] text { fill: #ffd2cc; }
 .dial-mado[data-state="used"] { cursor: default; }
-.dial-mado[data-state="used"] .dial-mado-star { filter: grayscale(1) brightness(0.32); }
+/* A fired star burns out slowly instead of turning grey at once. */
+.dial-mado[data-state="used"] .dial-mado-star { filter: grayscale(1) brightness(0.32); transition: filter 1100ms ease-out 150ms; }
 .dial-mado[data-state="used"] text { fill: #7d89ad; }
 
 @keyframes star-pulse {
@@ -286,7 +331,42 @@
 .dial-shield text { fill: var(--gold-2); font-size: 14px; pointer-events: none; }
 .dial-shield[data-draggable="true"] { cursor: grab; }
 
-.dial-ripple { fill: none; stroke-width: 2; animation: dial-ripple 1.2s ease-out both; }
+/* The newest echo appears when the flying star reaches the ring. */
+.dial-ripple { fill: none; stroke-width: 2; animation: dial-ripple 1.2s ease-out 380ms both; }
+.dial-mark-latest > circle:not(.dial-ripple) { animation: dial-mark-in 300ms ease-out 360ms both; }
+
+@keyframes dial-mark-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dial-shot-star { animation: dial-shot-fly 380ms cubic-bezier(0.5, 0, 0.9, 0.6) both; }
+.dial-shot-flare { opacity: 0; animation: dial-shot-flare 700ms ease-out 360ms both; }
+.dial-shot-word {
+  font: 400 13px Georgia, serif;
+  letter-spacing: 0.04em;
+  paint-order: stroke;
+  stroke: #040817;
+  stroke-width: 3px;
+  animation: dial-shot-word 1200ms ease-out 380ms both;
+}
+
+@keyframes dial-shot-fly {
+  from { opacity: 1; transform: translate(var(--from-x), var(--from-y)); }
+  85% { opacity: 1; }
+  to { opacity: 0; transform: translate(0, 0); }
+}
+
+@keyframes dial-shot-flare {
+  0% { opacity: 0.95; r: 4; }
+  100% { opacity: 0; r: 22; }
+}
+
+@keyframes dial-shot-word {
+  0% { opacity: 0; }
+  20%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
 
 @keyframes dial-ripple {
   from { r: 4; opacity: 1; }
