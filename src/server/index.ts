@@ -940,8 +940,6 @@ function commitFinishedRoundIfReady(game: LobbyGame) {
     });
   }
 
-  applyShieldRotations(game);
-
   const cleanedPlayers = removeDeadPlayerInsights([...game.gamePlayersById.values()]);
   game.gamePlayersById = new Map(cleanedPlayers.map((player) => [player.id, player]));
 
@@ -1115,29 +1113,22 @@ function driftShields(game: LobbyGame) {
   }
 }
 
-function applyShieldRotations(game: LobbyGame) {
-  for (const rotator of game.gamePlayersById.values()) {
-    if (!rotator.alive || !rotator.attackIntent || !("rotate" in rotator.attackIntent)) {
-      continue;
-    }
+// A rotation happens the moment it is declared, so it already protects in this round's battles.
+function rotateShield(game: LobbyGame, rotator: Player, delta: number) {
+  rotator.shieldFrequency = normalizeFrequency(rotator.shieldFrequency + delta);
+  // Rotating also resets the drift, so a tracked drift direction is lost too.
+  rotator.shieldDrift = randomShieldDrift();
+  game.shieldRotations.push({
+    roundNumber: game.roundNumber,
+    playerId: rotator.id,
+    playerName: rotator.name,
+  });
 
-    rotator.shieldFrequency = normalizeFrequency(
-      rotator.shieldFrequency + rotator.attackIntent.rotate.delta,
-    );
-    // Rotating also resets the drift, so a tracked drift direction is lost too.
-    rotator.shieldDrift = randomShieldDrift();
-    game.shieldRotations.push({
-      roundNumber: game.roundNumber,
-      playerId: rotator.id,
-      playerName: rotator.name,
-    });
+  for (const observer of game.gamePlayersById.values()) {
+    const insight = observer.insightsByTarget[rotator.id];
 
-    for (const observer of game.gamePlayersById.values()) {
-      const insight = observer.insightsByTarget[rotator.id];
-
-      if (observer.id !== rotator.id && insight) {
-        observer.insightsByTarget[rotator.id] = dilateInsight(insight, SHIELD_ROTATION_RANGE);
-      }
+    if (observer.id !== rotator.id && insight) {
+      observer.insightsByTarget[rotator.id] = dilateInsight(insight, SHIELD_ROTATION_RANGE);
     }
   }
 }
@@ -1186,6 +1177,11 @@ function submitAttack(
         ? { targetPlayerId: target.id }
         : { pass: true };
   game.attackSubmittedPlayerIds.add(playerId);
+
+  if ("rotate" in player.attackIntent) {
+    rotateShield(game, player, player.attackIntent.rotate.delta);
+  }
+
   resolveDeclarationsIfReady(game);
   emitGameUpdate(game);
   return { ok: true, game: createGameSnapshot(game, playerId) };
@@ -1206,7 +1202,6 @@ function resolveDeclarationsIfReady(game: LobbyGame) {
 
   if (game.status === "round_cleanup") {
     clearGameTimer(game);
-    applyShieldRotations(game);
     scheduleNextRound(game);
     return;
   }

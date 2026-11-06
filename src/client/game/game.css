@@ -41,7 +41,9 @@
 
 .game-top {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
   align-items: center;
   color: var(--faint);
   font-size: 0.78rem;
@@ -50,7 +52,8 @@
   text-transform: uppercase;
 }
 
-.game-room-code { margin-right: auto; }
+.game-room-code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 359px) { .game-room-word { display: none; } }
 
 .game-connection {
   width: 9px;
@@ -64,17 +67,16 @@
 .game-screen .game-icon-button {
   display: grid;
   place-items: center;
-  width: 38px;
-  min-height: 38px;
+  width: 32px;
+  min-height: 32px;
   padding: 0;
 }
 
 .game-steps {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  grid-template-columns: auto 1fr auto;
   gap: 10px;
   align-items: center;
-  margin-top: 8px;
 }
 
 .game-round {
@@ -96,13 +98,11 @@
   text-transform: uppercase;
 }
 
-/* On narrow phones the phase steps get their own line so the clock and hit points fit. */
-@media (max-width: 430px) {
-  .game-steps { row-gap: 6px; }
-  .game-steps ol { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
-  .game-clock { grid-column: 3; grid-row: 1; }
-  .game-hp { grid-column: 4; grid-row: 1; }
-}
+/* The round, room, clock and hit points share the first line; the phase steps get the second. */
+.game-steps { row-gap: 6px; }
+.game-steps ol { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
+.game-hp { grid-column: 3; grid-row: 1; }
+.game-round-line { display: flex; align-items: center; gap: 9px; white-space: nowrap; }
 
 .game-steps li { display: flex; gap: 5px; align-items: center; padding: 3px 9px 3px 3px; border-radius: 999px; color: var(--faint); }
 .game-steps li[data-on="true"] { color: var(--gold-2); background: rgba(224, 169, 62, 0.14); box-shadow: inset 0 0 0 1px rgba(255, 214, 121, 0.5), var(--glow-gold); }
@@ -129,6 +129,8 @@
 }
 
 .game-clock[data-urgent="true"] { color: #f06e63; }
+.game-clock { display: inline-flex; align-items: center; gap: 9px; }
+.game-clock-separator { width: 1px; height: 16px; background: rgba(224, 169, 62, 0.45); }
 .game-clock-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 .sheet-orders {
@@ -147,8 +149,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  align-items: center;
-  margin-top: 12px;
+  align-items: flex-start;
+  margin-top: 10px;
 }
 
 .game-screen .game-chips > button:not(.game-mini-table) {
@@ -254,6 +256,7 @@
 .dial-tick[data-major="true"] { stroke: #ffd679; stroke-width: 2; }
 .dial-degree { fill: #e9c77a; font: 400 10px Georgia, serif; }
 .dial-lane-initial { font: 800 8px system-ui, sans-serif; pointer-events: none; }
+.dial-lane-arc[data-narrow="true"] { stroke: #fff6dc; stroke-opacity: 0.85; stroke-width: 1; paint-order: stroke; }
 .dial-orbit { fill: none; stroke: rgba(255, 214, 121, 0.22); stroke-dasharray: 1 5; }
 .dial-reach { fill: rgba(95, 227, 214, 0.1); stroke: rgba(95, 227, 214, 0.3); stroke-width: 0.6; }
 .dial-ghost { fill: none; stroke: rgba(255, 236, 190, 0.45); stroke-dasharray: 2 3; }

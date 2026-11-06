@@ -67,6 +67,25 @@ function orbitRadii(mados: DialMado[]) {
   return radii;
 }
 
+// A range of a few degrees is only a few pixels long, so short arcs are drawn at least this wide
+// (centred on the true range) and outlined, or a well-tracked shield nearly disappears.
+const MIN_ARC_DEGREES = 6;
+const NARROW_ARC = 12;
+
+function visibleArc(arc: FrequencyArc): FrequencyArc {
+  const missing = MIN_ARC_DEGREES - (arc.end - arc.start);
+  return missing > 0 ? { start: arc.start - missing / 2, end: arc.end + missing / 2 } : arc;
+}
+
+// The lane initial sits just past the end of the widest arc, so it never covers a short arc.
+// An unnarrowed lane spans the whole circle, and then the label simply sits in the middle.
+function laneLabelAngle(widest: FrequencyArc, radius: number) {
+  if (widest.end - widest.start >= 300) return (widest.start + widest.end) / 2;
+  const visible = visibleArc(widest);
+  const labelDegrees = (10 / radius) * (180 / Math.PI);
+  return visible.end + labelDegrees;
+}
+
 export function FrequencyDial({
   lanes,
   mados,
@@ -161,12 +180,14 @@ export function FrequencyDial({
       {lanes.map((lane, index) => {
         const inner = LANE_START + index * LANE_STEP;
         const widest = lane.arcs.reduce((a, b) => (b.end - b.start > a.end - a.start ? b : a));
-        const label = polar(C, C, inner + 2, (widest.start + widest.end) / 2);
+        const label = polar(C, C, inner + 2, laneLabelAngle(widest, inner));
         return (
           <g filter={lane.focused ? "url(#dial-glow)" : undefined} key={lane.id} opacity={lane.opacity}>
             {lane.arcs.map((arc) => (
               <path
-                d={arcBand(C, C, inner - (lane.focused ? 2 : 0), inner + 5 + (lane.focused ? 2 : 0), arc)}
+                className="dial-lane-arc"
+                d={arcBand(C, C, inner - (lane.focused ? 2 : 0), inner + 5 + (lane.focused ? 2 : 0), visibleArc(arc))}
+                data-narrow={arc.end - arc.start < NARROW_ARC}
                 fill={lane.color}
                 key={arc.start}
               />

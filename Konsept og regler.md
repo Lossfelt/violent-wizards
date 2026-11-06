@@ -106,7 +106,7 @@ Hver spiller sin helse starter på 200 poeng. Spillernes helse er skjult for hve
 * Hvert skjold driver av seg selv 2 til 6° per runde. Retning og fart er fast for hver trollmann og skjult for andre, men man ser sin egen.
 * Kunnskap om andres skjold blir derfor eldre for hver runde: de kjente buene utvides med 6° på hver side hver runde, og motstanderlisten viser i hvilken runde man sist fikk et ekko. Den sanne frekvensen er alltid innenfor buen.
 * Tilfeldig drift (frem og tilbake) ble forkastet etter simulering: små tilfeldige steg nuller hverandre ut, og kunnskap var nesten like presis etter 8 runder. Med fast retning gir et fulltreff-estimat fullt treff i omtrent 80 % av tilfellene etter 3 runder, 40 % etter 5 og 0 % etter 8.
-* I stedet for å angripe kan man rotere sitt eget skjold opptil 60° i valgfri retning. Rotasjonen skjer når runden avsluttes.
+* I stedet for å angripe kan man rotere sitt eget skjold opptil 60° i valgfri retning. Rotasjonen skjer med en gang man erklærer den, så den beskytter allerede i rundens kamper.
   * Alle trollmenn føler rotasjonen, så den er offentlig og vises i historikken. Den nye frekvensen er hemmelig, og alle andres kunnskap om skjoldet utvides med 60°.
   * Driften får ny, tilfeldig retning og fart, så en motstander som har lært seg driftretningen mister også det.
   * Prisen: man angriper ikke den runden, og blir man angrepet kan man bare flykte.
