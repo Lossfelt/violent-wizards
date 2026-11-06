@@ -191,6 +191,23 @@
   animation: feud-pulse 0.9s ease-in-out infinite alternate;
 }
 
+/* A short spark that runs the length of a live fight line; the return spark runs the other way. */
+.feud-line-spark {
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 6 94;
+  filter: drop-shadow(0 0 4px #ffd679);
+  animation: feud-spark 1.6s linear infinite;
+}
+
+.feud-line-spark[data-return="true"] { animation-delay: -0.8s; }
+
+@keyframes feud-spark {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
 @keyframes feud-pulse {
   from { stroke-opacity: 0.35; }
   to { stroke-opacity: 1; }
@@ -198,7 +215,34 @@
 
 .feud-seat-ring { fill: #070d26; stroke-width: 2.5; }
 .feud-seat[data-selectable="true"] { cursor: pointer; }
+/* A seat dims slowly when its wizard falls. Transitions never run on first render, so a reload stays still. */
+.feud-seat { transition: opacity 1800ms ease-in 600ms; }
 .feud-seat[data-dead="true"] { opacity: 0.35; }
+.feud-seat[data-dead="true"] .feud-seat-initial { animation: feud-fade-in 600ms ease-out both; }
+
+.feud-fall-flare { fill: none; stroke: #fff1d0; stroke-width: 3; filter: drop-shadow(0 0 8px #ff8a3d); animation: feud-fall-flare 900ms ease-out both; }
+.feud-fall-constellation { animation: feud-fade-out 1600ms ease-in 300ms both; }
+.feud-fall-star { animation: feud-fall-star 1700ms cubic-bezier(0.5, 0, 0.8, 0.4) 250ms both; }
+
+@keyframes feud-fall-flare {
+  from { r: 18; opacity: 1; }
+  to { r: 46; opacity: 0; }
+}
+
+@keyframes feud-fall-star {
+  0% { opacity: 1; transform: translate(0, 0); }
+  100% { opacity: 0; transform: translate(14px, 70px); }
+}
+
+@keyframes feud-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes feud-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 .feud-seat[data-focus="true"] .feud-seat-ring { fill: #1c1a2e; stroke-width: 4; }
 .feud-seat-initial { fill: var(--text); font-family: Georgia, serif; font-weight: 700; pointer-events: none; }
 .feud-seat-name { fill: #ffe3a0; font: 400 11px Georgia, serif; letter-spacing: 0.04em; pointer-events: none; }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BookOpen } from "lucide-react";
 import type { TableSnapshot } from "../../shared";
 import { seatColor } from "../game/dialMath";
@@ -22,8 +22,28 @@ type Props = {
   onOpenRules: () => void;
 };
 
+// Announces each new round across the board for a moment. The round the screen opens on is not announced.
+function RoundBanner({ round }: { round: number }) {
+  const seen = useRef(round);
+  const [shown, setShown] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (round <= seen.current) return;
+    seen.current = round;
+    setShown(round);
+    const timer = setTimeout(() => setShown(null), 2800);
+    return () => clearTimeout(timer);
+  }, [round]);
+
+  return shown === null ? null : (
+    <div aria-hidden="true" className="table-round-banner" key={shown}>
+      <span>Round {shown}</span>
+    </div>
+  );
+}
+
 const PHASES: Array<[TableSnapshot["status"], string, string]> = [
-  ["round_prepare", "Prepare", "Wizards are preparing their Mados and choosing whom to attack."],
+  ["round_prepare", "Prepare", "Wizards are preparing and choosing targets."],
   ["attack_declaration", "Declare", "Wizards are choosing whom to attack."],
   ["battle_resolution", "Warfare", "Battles are being fought."],
 ];
@@ -179,6 +199,7 @@ function TableGame({ table, onNewGame }: Props) {
 
       <section className="table-board">
         <FeudTable data={feuds} focusId={null} showNumbers size="full" />
+        <RoundBanner round={table.roundNumber} />
       </section>
 
       <section className="table-panel table-wizards">

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type {
   GameSnapshot,
   PublicBattleHistoryEntry,
@@ -7,7 +8,7 @@ import type {
 } from "../../shared";
 import { polar, seatColor } from "./dialMath";
 import { ConstellationMark } from "./Sigil";
-import { BrassRing, Medallion } from "./artAssets";
+import { BrassRing, Medallion, StarSprite } from "./artAssets";
 
 export type FeudPerson = {
   id: string;
@@ -115,6 +116,31 @@ function clearOfRingStars(angle: number) {
   return angle;
 }
 
+const FALL_MS = 2600;
+
+// Wizards who died since the last render, kept for a moment so their fall can play out.
+// Wizards already dead when the table first appears (a reload) do not fall again.
+function useFallen(people: FeudPerson[]) {
+  const wasAlive = useRef(new Map(people.map((person) => [person.id, person.alive])));
+  const [fallen, setFallen] = useState<ReadonlySet<string>>(new Set());
+  const deadKey = people.filter((person) => !person.alive).map((person) => person.id).join(",");
+
+  useEffect(() => {
+    const newlyFallen = people.filter((person) => !person.alive && wasAlive.current.get(person.id) === true).map((person) => person.id);
+    wasAlive.current = new Map(people.map((person) => [person.id, person.alive]));
+    if (newlyFallen.length === 0) return;
+
+    setFallen((current) => new Set([...current, ...newlyFallen]));
+    // Not cleared on re-render: a second death must not cancel the first one's timer.
+    setTimeout(() => {
+      setFallen((current) => new Set([...current].filter((id) => !newlyFallen.includes(id))));
+    }, FALL_MS);
+    // Only a change in who is dead matters.
+  }, [deadKey]);
+
+  return fallen;
+}
+
 type TableProps = {
   data: FeudData;
   size: "mini" | "full";
@@ -140,6 +166,7 @@ export function FeudTable({ data, size, focusId, showNumbers = false, onSelect }
   });
   const byName = new Map(seats.map((seat) => [seat.name, seat]));
   const byId = new Map(seats.map((seat) => [seat.id, seat]));
+  const fallen = useFallen(data.people);
 
   return (
     <svg className="feud-table" data-size={size} role="group" aria-label="Who has fought whom" viewBox={`0 0 ${w} ${h}`}>
@@ -192,7 +219,14 @@ export function FeudTable({ data, size, focusId, showNumbers = false, onSelect }
         const a = byId.get(entry.playerAId);
         const b = byId.get(entry.playerBId);
         if (!a || !b) return null;
-        return <line className="feud-line-live" key={entry.id} x1={a.x} x2={b.x} y1={a.y} y2={b.y} />;
+        // Sparks of light travel both ways along a live fight: the two wizards trading shots.
+        return (
+          <g key={entry.id}>
+            <line className="feud-line-live" x1={a.x} x2={b.x} y1={a.y} y2={b.y} />
+            <line className="feud-line-spark" pathLength={100} x1={a.x} x2={b.x} y1={a.y} y2={b.y} />
+            <line className="feud-line-spark" data-return="true" pathLength={100} x1={b.x} x2={a.x} y1={b.y} y2={a.y} />
+          </g>
+        );
       })}
       {seats.map((seat) => {
         const selectable = full && seat.label !== "You" && seat.alive && onSelect;
@@ -200,6 +234,7 @@ export function FeudTable({ data, size, focusId, showNumbers = false, onSelect }
           <g
             className="feud-seat"
             data-dead={!seat.alive}
+            data-fell={fallen.has(seat.id)}
             data-focus={focusId === seat.id}
             data-selectable={Boolean(selectable)}
             key={seat.id}
@@ -218,7 +253,20 @@ export function FeudTable({ data, size, focusId, showNumbers = false, onSelect }
               style={{ filter: `drop-shadow(0 0 ${full ? 8 : 3}px ${seat.color})` }}
             />
             {full ? <Medallion className="feud-medallion" cx={seat.x} cy={seat.y} innerRadius={19} /> : null}
-            {full && seat.alive ? (
+            {full && fallen.has(seat.id) ? (
+              // The fallen wizard's star flares, then drops away while their constellation fades.
+              <g className="feud-fall">
+                <circle className="feud-fall-flare" cx={seat.x} cy={seat.y} r="20" />
+                <g className="feud-fall-constellation">
+                  <ConstellationMark cx={seat.x} cy={seat.y} radius={11} seat={seat.seat} />
+                </g>
+                <g transform={`translate(${seat.x} ${seat.y})`}>
+                  <g className="feud-fall-star">
+                    <StarSprite cx={0} cy={0} glowRadius={9} />
+                  </g>
+                </g>
+              </g>
+            ) : full && seat.alive ? (
               <ConstellationMark cx={seat.x} cy={seat.y} radius={11} seat={seat.seat} />
             ) : (
               <text
