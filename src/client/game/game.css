@@ -274,7 +274,8 @@
 .dial-mado[data-state="discard"] .dial-mado-hit { stroke: var(--danger); stroke-dasharray: 3 3; }
 .dial-mado[data-state="discard"] text { fill: #ffd2cc; }
 .dial-mado[data-state="used"] { cursor: default; }
-.dial-mado[data-state="used"] .dial-mado-star { filter: grayscale(1) brightness(0.32); }
+/* A fired star burns out slowly instead of turning grey at once. */
+.dial-mado[data-state="used"] .dial-mado-star { filter: grayscale(1) brightness(0.32); transition: filter 1100ms ease-out 150ms; }
 .dial-mado[data-state="used"] text { fill: #7d89ad; }
 
 @keyframes star-pulse {
@@ -286,7 +287,42 @@
 .dial-shield text { fill: var(--gold-2); font-size: 14px; pointer-events: none; }
 .dial-shield[data-draggable="true"] { cursor: grab; }
 
-.dial-ripple { fill: none; stroke-width: 2; animation: dial-ripple 1.2s ease-out both; }
+/* The newest echo appears when the flying star reaches the ring. */
+.dial-ripple { fill: none; stroke-width: 2; animation: dial-ripple 1.2s ease-out 380ms both; }
+.dial-mark-latest > circle:not(.dial-ripple) { animation: dial-mark-in 300ms ease-out 360ms both; }
+
+@keyframes dial-mark-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dial-shot-star { animation: dial-shot-fly 380ms cubic-bezier(0.5, 0, 0.9, 0.6) both; }
+.dial-shot-flare { opacity: 0; animation: dial-shot-flare 700ms ease-out 360ms both; }
+.dial-shot-word {
+  font: 400 13px Georgia, serif;
+  letter-spacing: 0.04em;
+  paint-order: stroke;
+  stroke: #040817;
+  stroke-width: 3px;
+  animation: dial-shot-word 1200ms ease-out 380ms both;
+}
+
+@keyframes dial-shot-fly {
+  from { opacity: 1; transform: translate(var(--from-x), var(--from-y)); }
+  85% { opacity: 1; }
+  to { opacity: 0; transform: translate(0, 0); }
+}
+
+@keyframes dial-shot-flare {
+  0% { opacity: 0.95; r: 4; }
+  100% { opacity: 0; r: 22; }
+}
+
+@keyframes dial-shot-word {
+  0% { opacity: 0; }
+  20%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
 
 @keyframes dial-ripple {
   from { r: 4; opacity: 1; }
