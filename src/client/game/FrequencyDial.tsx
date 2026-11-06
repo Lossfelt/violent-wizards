@@ -107,12 +107,52 @@ export function FrequencyDial({
       role="img"
       viewBox={`0 0 ${SIZE} ${SIZE}`}
     >
+      <defs>
+        <radialGradient id="dial-face-fill">
+          <stop offset="0%" stopColor="#0d1a44" stopOpacity="0.92" />
+          <stop offset="70%" stopColor="#060c26" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#03061a" stopOpacity="0.95" />
+        </radialGradient>
+        <radialGradient id="dial-star-body">
+          <stop offset="0%" stopColor="#fffbea" />
+          <stop offset="55%" stopColor="#ffd679" />
+          <stop offset="100%" stopColor="#d98b1c" />
+        </radialGradient>
+        <radialGradient id="dial-star-halo">
+          <stop offset="0%" stopColor="#ffc94d" stopOpacity="0.75" />
+          <stop offset="100%" stopColor="#ffc94d" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="dial-star-halo-tuned">
+          <stop offset="0%" stopColor="#5fe3d6" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#5fe3d6" stopOpacity="0" />
+        </radialGradient>
+        <filter id="dial-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.2" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+
       <circle className="dial-face" cx={C} cy={C} r={R_TICK} />
-      {Array.from({ length: 36 }, (_, i) => {
-        const deg = i * 10;
+      {/* The star chart grid: faint rings and meridians, like an orrery's plate. */}
+      {[44, 72, ORBIT + 14].map((r) => (
+        <circle className="dial-grid" cx={C} cy={C} key={r} r={r} />
+      ))}
+      {Array.from({ length: 12 }, (_, i) => {
+        const a = polar(C, C, 24, i * 30);
+        const b = polar(C, C, LANE_START - 4, i * 30);
+        return <line className="dial-grid" key={i} x1={a.x} x2={b.x} y1={a.y} y2={b.y} />;
+      })}
+      <circle className="dial-brass" cx={C} cy={C} r={R_TICK} />
+      <circle className="dial-brass dial-brass-inner" cx={C} cy={C} r={R_TICK - 11} />
+      {Array.from({ length: 72 }, (_, i) => {
+        const deg = i * 5;
         const major = deg % 30 === 0;
-        const a = polar(C, C, R_TICK, deg);
-        const b = polar(C, C, R_TICK - (major ? 8 : 4), deg);
+        const minor = deg % 10 !== 0;
+        const a = polar(C, C, R_TICK - 1, deg);
+        const b = polar(C, C, R_TICK - (major ? 10 : minor ? 3 : 6), deg);
         return <line className="dial-tick" data-major={major} key={deg} x1={a.x} x2={b.x} y1={a.y} y2={b.y} />;
       })}
       {[0, 90, 180, 270].map((deg) => {
@@ -129,7 +169,7 @@ export function FrequencyDial({
         const widest = lane.arcs.reduce((a, b) => (b.end - b.start > a.end - a.start ? b : a));
         const label = polar(C, C, inner + 2, (widest.start + widest.end) / 2);
         return (
-          <g key={lane.id} opacity={lane.opacity}>
+          <g filter={lane.focused ? "url(#dial-glow)" : undefined} key={lane.id} opacity={lane.opacity}>
             {lane.arcs.map((arc) => (
               <path
                 d={arcBand(C, C, inner - (lane.focused ? 2 : 0), inner + 5 + (lane.focused ? 2 : 0), arc)}
@@ -149,7 +189,7 @@ export function FrequencyDial({
         const p = polar(C, C, R_TICK - 2, mark.frequency);
         const latest = index === marks.length - 1;
         return (
-          <g key={`${index}-${mark.frequency}`}>
+          <g filter="url(#dial-glow)" key={`${index}-${mark.frequency}`}>
             {latest ? <circle className="dial-ripple" cx={p.x} cy={p.y} r="6" stroke={ECHO_COLOR[mark.echo]} /> : null}
             <circle cx={p.x} cy={p.y} fill={ECHO_COLOR[mark.echo]} r="4" />
           </g>
@@ -188,7 +228,15 @@ export function FrequencyDial({
               }
               role="button"
             >
-              <circle cx={p.x} cy={p.y} r="15" />
+              {/* A Mado is a small burning star: a halo of light around a bright core. */}
+              <circle
+                className="dial-mado-halo"
+                cx={p.x}
+                cy={p.y}
+                fill={mado.state === "tuned" ? "url(#dial-star-halo-tuned)" : "url(#dial-star-halo)"}
+                r="22"
+              />
+              <circle className="dial-mado-body" cx={p.x} cy={p.y} r="13" />
               <text dominantBaseline="central" textAnchor="middle" x={p.x} y={p.y}>
                 {mado.state === "discard" ? "✕" : mado.slot + 1}
               </text>

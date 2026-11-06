@@ -13,7 +13,7 @@
   border-radius: 12px;
   padding: 0 20px;
   color: var(--text);
-  background: rgba(245, 232, 202, 0.06);
+  background: rgba(14, 26, 66, 0.75);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -23,9 +23,10 @@
 
 .table-screen .table-primary {
   min-height: 60px;
-  border-color: var(--gold-2);
-  color: #171009;
-  background: linear-gradient(180deg, var(--gold-2), var(--gold));
+  border-color: #ffe6a8;
+  color: #1d1204;
+  background: radial-gradient(circle at 50% 0%, #fff0c4, var(--gold-2) 45%, var(--gold));
+  box-shadow: 0 0 24px rgba(255, 196, 92, 0.45);
   font-size: 1.15rem;
 }
 
@@ -92,6 +93,8 @@
   margin: 8px 0 24px;
   color: var(--gold-2);
   font: 400 clamp(2.8rem, 7vw, 6rem) / 1 Georgia, serif;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 28px rgba(255, 196, 92, 0.55), 0 0 4px rgba(255, 240, 200, 0.6);
 }
 
 .table-message p {
@@ -113,7 +116,7 @@
   border-radius: 12px;
   padding: 14px;
   color: var(--text);
-  background: rgba(3, 5, 5, 0.8);
+  background: rgba(3, 7, 20, 0.82);
   font: 400 1.4rem / 1.35 Georgia, serif;
   resize: vertical;
 }
@@ -126,7 +129,8 @@
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 24px;
-  background: rgba(12, 15, 15, 0.9);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px rgba(255, 214, 121, 0.08), 0 18px 50px rgba(0, 0, 0, 0.45);
   text-align: center;
 }
 
@@ -156,9 +160,14 @@
 }
 
 .table-roster li {
-  border: 3px solid;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border: 2px solid;
   border-radius: 999px;
-  padding: 10px 22px;
+  padding: 6px 22px 6px 6px;
+  background: rgba(6, 12, 34, 0.8);
+  box-shadow: 0 0 16px rgba(80, 120, 255, 0.15);
   font: 400 clamp(1.2rem, 2.2vw, 1.7rem) Georgia, serif;
 }
 
@@ -173,15 +182,40 @@
   grid-template-areas:
     "status status"
     "board side";
-  gap: clamp(16px, 3vw, 36px);
-  margin-top: 16px;
+  gap: clamp(12px, 2vw, 28px) clamp(16px, 3vw, 36px);
+  margin-top: 8px;
 }
 
-.table-status { grid-area: status; display: grid; gap: 10px; }
-.table-board { grid-area: board; display: grid; place-items: center; }
-.table-side { grid-area: side; display: grid; align-content: start; gap: 12px; }
+/* One line across the top, so the war table can use the rest of the screen height. */
+.table-status {
+  grid-area: status;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: center;
+}
 
-.table-round { color: var(--gold-2); font: 400 clamp(2rem, 4vw, 3.4rem) Georgia, serif; }
+.table-status > p:not(.table-deadline) { flex: 1 1 280px; }
+.table-board { grid-area: board; display: grid; place-items: center; }
+.table-side {
+  grid-area: side;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  border: 1px solid var(--border);
+  max-height: calc(100vh - 170px);
+  overflow-y: auto;
+  border-radius: 20px;
+  padding: 20px 24px;
+  background: var(--panel);
+  box-shadow: inset 0 1px 0 rgba(255, 214, 121, 0.1), 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+.table-round {
+  color: var(--gold-2);
+  font: 400 clamp(2rem, 4vw, 3.4rem) Georgia, serif;
+  text-shadow: 0 0 22px rgba(255, 196, 92, 0.5);
+}
 
 .table-status ol {
   display: flex;
@@ -195,9 +229,10 @@
 }
 
 .table-status li { padding: 6px 16px; border-radius: 999px; color: var(--faint); }
-.table-status li[data-on="true"] { color: #171009; background: var(--gold-2); }
+.table-status li[data-on="true"] { color: #1d1204; background: var(--gold-2); box-shadow: var(--glow-gold); }
 .table-status p { margin: 0; color: var(--text); font-size: clamp(1.1rem, 2vw, 1.6rem); }
-.table-status .table-deadline { color: var(--muted); }
+.table-status .table-deadline { margin-left: auto; color: var(--muted); }
+.table-status .table-deadline b { font-size: 1.4em; text-shadow: var(--glow-gold); }
 .table-status .table-deadline b { color: var(--gold-2); font-variant-numeric: tabular-nums; }
 .table-status .table-deadline[data-urgent="true"] b { color: #f06e63; }
 .table-roster .round-time { margin: 0 0 20px; }
@@ -205,7 +240,7 @@
 .table-board .feud-table[data-size="full"] {
   width: auto;
   max-width: 100%;
-  height: min(62vh, 600px);
+  height: clamp(320px, calc(100vh - 170px), 760px);
 }
 .table-board .feud-seat-name { font-size: 12px; }
 
@@ -230,7 +265,6 @@
   font-size: 1.15rem;
 }
 
-.table-players i { width: 14px; height: 14px; border-radius: 999px; }
 .table-players span,
 .table-battles span { margin-left: auto; color: var(--muted); font-size: 0.95rem; }
 .table-players li[data-alive="false"] { opacity: 0.45; text-decoration: line-through; }

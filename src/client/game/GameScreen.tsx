@@ -6,6 +6,7 @@ import { ActionSheet } from "./ActionSheet";
 import { DialCenter } from "./DialCenter";
 import { FeudList, FeudTable, feudDataFromGame } from "./FeudTable";
 import { FrequencyDial, type DialLane, type DialMado } from "./FrequencyDial";
+import { Sigil } from "./Sigil";
 import { FRESHNESS_OPACITY, angleDelta, freshnessOf, isKnown, opponentColor } from "./dialMath";
 import { formatClock, useCountdown } from "../useCountdown";
 import "./game.css";
@@ -239,6 +240,7 @@ export function GameScreen({ game: serverGame, actions, error, connected, onOpen
             style={{ borderColor: opponentColor(game, opponent.id) }}
             type="button"
           >
+            <Sigil seat={opponent.seat} size={22} />
             {opponent.name}
             {!opponent.connected ? <small> · off</small> : null}
           </button>

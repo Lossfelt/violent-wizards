@@ -5,7 +5,8 @@ export type Opponent = GameSnapshot["opponents"][number];
 export type Freshness = "fresh" | "aging" | "stale" | "unknown";
 
 // One identity colour per seat (join order), so a wizard has the same colour on every screen.
-const SEAT_COLORS = ["#f5d27a", "#5ee0c2", "#c79bff", "#ff9f5a", "#7fb2ff", "#ff7a9c", "#a6e36a", "#e3c26a"];
+// Saturated enough to glow against the night sky, far enough apart to tell at a glance.
+const SEAT_COLORS = ["#ffc94d", "#44d9ff", "#b98bff", "#ff7a45", "#ff5f9e", "#4fe39a", "#8fb4ff", "#c6f05a"];
 
 export function seatColor(seat: number) {
   return SEAT_COLORS[Math.max(0, seat) % SEAT_COLORS.length]!;

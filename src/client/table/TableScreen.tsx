@@ -3,6 +3,7 @@ import { BookOpen } from "lucide-react";
 import type { TableSnapshot } from "../../shared";
 import { seatColor } from "../game/dialMath";
 import { FeudList, FeudTable, feudDataFromTable } from "../game/FeudTable";
+import { Sigil } from "../game/Sigil";
 import { RoundTimePicker } from "../RoundTimePicker";
 import { formatClock, useCountdown } from "../useCountdown";
 import "../game/game.css";
@@ -121,6 +122,7 @@ function TableLobby({ table, joinUrl, qrCodeUrl, onSaveMessage, onSetRoundMinute
         <ul>
           {table.players.map((player) => (
             <li data-online={player.connected} key={player.id} style={{ borderColor: seatColor(player.seat) }}>
+              <Sigil seat={player.seat} size={34} />
               {player.name}
             </li>
           ))}
@@ -183,7 +185,7 @@ function TableGame({ table, onNewGame }: Props) {
         <ul className="table-players">
           {table.players.map((player) => (
             <li data-alive={player.alive} key={player.id}>
-              <i style={{ background: seatColor(player.seat) }} />
+              <Sigil seat={player.seat} size={26} />
               <b>{player.name}</b>
               <span>
                 {!player.alive
