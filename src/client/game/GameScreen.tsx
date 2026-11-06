@@ -215,8 +215,9 @@ export function GameScreen({ game: serverGame, actions, error, connected, onOpen
       <div className="game-steps">
         <span className="game-round">Round {game.roundNumber}</span>
         <ol>
-          {STEPS.map(([status, label]) => (
+          {STEPS.map(([status, label], index) => (
             <li data-on={game.status === status} key={status}>
+              <span className="game-step-numeral">{["I", "II", "III"][index]}</span>
               {label}
             </li>
           ))}

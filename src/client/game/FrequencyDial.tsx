@@ -1,8 +1,10 @@
 import { useRef, type PointerEvent, type ReactNode } from "react";
 import type { EchoBand, FrequencyArc } from "../../shared";
+import { BrassRing, StarSprite } from "./artAssets";
 import { ECHO_COLOR, arcBand, pointerAngle, polar } from "./dialMath";
 
-const SIZE = 340;
+// The viewBox leaves room outside the tick ring for the brass astrolabe ring.
+const SIZE = 380;
 const C = SIZE / 2;
 const R_TICK = 152;
 const LANE_START = 121;
@@ -113,19 +115,6 @@ export function FrequencyDial({
           <stop offset="70%" stopColor="#060c26" stopOpacity="0.9" />
           <stop offset="100%" stopColor="#03061a" stopOpacity="0.95" />
         </radialGradient>
-        <radialGradient id="dial-star-body">
-          <stop offset="0%" stopColor="#fffbea" />
-          <stop offset="55%" stopColor="#ffd679" />
-          <stop offset="100%" stopColor="#d98b1c" />
-        </radialGradient>
-        <radialGradient id="dial-star-halo">
-          <stop offset="0%" stopColor="#ffc94d" stopOpacity="0.75" />
-          <stop offset="100%" stopColor="#ffc94d" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id="dial-star-halo-tuned">
-          <stop offset="0%" stopColor="#5fe3d6" stopOpacity="0.8" />
-          <stop offset="100%" stopColor="#5fe3d6" stopOpacity="0" />
-        </radialGradient>
         <filter id="dial-glow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="2.2" result="blur" />
           <feMerge>
@@ -145,8 +134,6 @@ export function FrequencyDial({
         const b = polar(C, C, LANE_START - 4, i * 30);
         return <line className="dial-grid" key={i} x1={a.x} x2={b.x} y1={a.y} y2={b.y} />;
       })}
-      <circle className="dial-brass" cx={C} cy={C} r={R_TICK} />
-      <circle className="dial-brass dial-brass-inner" cx={C} cy={C} r={R_TICK - 11} />
       {Array.from({ length: 72 }, (_, i) => {
         const deg = i * 5;
         const major = deg % 30 === 0;
@@ -155,14 +142,21 @@ export function FrequencyDial({
         const b = polar(C, C, R_TICK - (major ? 10 : minor ? 3 : 6), deg);
         return <line className="dial-tick" data-major={major} key={deg} x1={a.x} x2={b.x} y1={a.y} y2={b.y} />;
       })}
-      {[0, 90, 180, 270].map((deg) => {
-        const p = polar(C, C, R_TICK + 10, deg);
-        return (
-          <text className="dial-degree" dominantBaseline="middle" key={deg} textAnchor="middle" x={p.x} y={p.y}>
-            {deg}
-          </text>
-        );
-      })}
+      <BrassRing className="dial-ring" cx={C} cy={C} innerRadius={R_TICK + 1} />
+      {/* Degree plaques set into the brass ring. The ring's own stars mark 0, 90, 180 and 270. */}
+      {Array.from({ length: 12 }, (_, i) => i * 30)
+        .filter((deg) => deg % 90 !== 0)
+        .map((deg) => {
+          const p = polar(C, C, R_TICK + 16, deg);
+          return (
+            <g className="dial-plaque" key={deg}>
+              <circle cx={p.x} cy={p.y} r="9.5" />
+              <text dominantBaseline="central" textAnchor="middle" x={p.x} y={p.y}>
+                {deg}
+              </text>
+            </g>
+          );
+        })}
 
       {lanes.map((lane, index) => {
         const inner = LANE_START + index * LANE_STEP;
@@ -228,15 +222,9 @@ export function FrequencyDial({
               }
               role="button"
             >
-              {/* A Mado is a small burning star: a halo of light around a bright core. */}
-              <circle
-                className="dial-mado-halo"
-                cx={p.x}
-                cy={p.y}
-                fill={mado.state === "tuned" ? "url(#dial-star-halo-tuned)" : "url(#dial-star-halo)"}
-                r="22"
-              />
-              <circle className="dial-mado-body" cx={p.x} cy={p.y} r="13" />
+              {/* A Mado is a small burning star. The plain circle is the tap target. */}
+              <circle className="dial-mado-hit" cx={p.x} cy={p.y} r="15" />
+              <StarSprite className="dial-mado-star" cx={p.x} cy={p.y} glowRadius={19} />
               <text dominantBaseline="central" textAnchor="middle" x={p.x} y={p.y}>
                 {mado.state === "discard" ? "✕" : mado.slot + 1}
               </text>

@@ -7,6 +7,7 @@ import type {
 } from "../../shared";
 import { polar, seatColor } from "./dialMath";
 import { ConstellationMark } from "./Sigil";
+import { BrassRing, Medallion } from "./artAssets";
 
 export type FeudPerson = {
   id: string;
@@ -103,6 +104,17 @@ export function roundsAgo(roundNumber: number, round: number) {
   return age <= 0 ? "this round" : age === 1 ? "last round" : `${age} rounds ago`;
 }
 
+// The opening of the brass ring around the full table.
+const PLATE_RADIUS = 150;
+
+// The ring has star ornaments at 0, 90, 180 and 270 degrees; name plaques slide off them.
+function clearOfRingStars(angle: number) {
+  const offset = ((angle % 90) + 90) % 90;
+  if (offset < 14) return angle + (14 - offset);
+  if (offset > 76) return angle - (offset - 76);
+  return angle;
+}
+
 type TableProps = {
   data: FeudData;
   size: "mini" | "full";
@@ -114,20 +126,34 @@ type TableProps = {
 // Who has fought whom, drawn as a round table. Lines fade with age; live fights pulse.
 export function FeudTable({ data, size, focusId, showNumbers = false, onSelect }: TableProps) {
   const full = size === "full";
-  const w = full ? 320 : 112;
-  const h = full ? 280 : 96;
-  const seats = data.people.map((person, index) => ({
-    ...person,
-    ...polar(w / 2, h / 2, full ? 104 : 34, 180 + (index * 360) / Math.max(1, data.people.length)),
-  }));
+  const w = full ? 380 : 112;
+  const h = full ? 370 : 96;
+  const ring = full ? 108 : 34;
+  const seats = data.people.map((person, index) => {
+    const angle = 180 + (index * 360) / Math.max(1, data.people.length);
+    return {
+      ...person,
+      angle,
+      ...polar(w / 2, h / 2, ring, angle),
+      plaque: polar(w / 2, h / 2, PLATE_RADIUS + 15, clearOfRingStars(angle)),
+    };
+  });
   const byName = new Map(seats.map((seat) => [seat.name, seat]));
   const byId = new Map(seats.map((seat) => [seat.id, seat]));
-  const ring = full ? 104 : 34;
 
   return (
     <svg className="feud-table" data-size={size} role="group" aria-label="Who has fought whom" viewBox={`0 0 ${w} ${h}`}>
-      <circle className="feud-plate" cx={w / 2} cy={h / 2} r={ring + (full ? 30 : 11)} />
-      {full ? <circle className="feud-plate-inner" cx={w / 2} cy={h / 2} r={ring} /> : null}
+      {full ? (
+        <>
+          <circle className="feud-plate" cx={w / 2} cy={h / 2} r={PLATE_RADIUS} />
+          {[40, 75, ring].map((r) => (
+            <circle className="feud-plate-inner" cx={w / 2} cy={h / 2} key={r} r={r} />
+          ))}
+          <BrassRing className="feud-ring" cx={w / 2} cy={h / 2} innerRadius={PLATE_RADIUS} />
+        </>
+      ) : (
+        <circle className="feud-plate" cx={w / 2} cy={h / 2} r={ring + 11} />
+      )}
       {feudsOf(data).map((feud) => {
         const a = byName.get(feud.a);
         const b = byName.get(feud.b);
@@ -147,8 +173,8 @@ export function FeudTable({ data, size, focusId, showNumbers = false, onSelect }
               className="feud-line"
               stroke={`url(#${gradientId})`}
               strokeOpacity={Math.max(0.25, 0.95 - age * 0.22)}
-              strokeWidth={full ? 1.5 + feud.count : 1 + feud.count * 0.5}
-              style={{ filter: `drop-shadow(0 0 ${full ? 4 : 2}px ${a.color})` }}
+              strokeWidth={full ? 2.5 + feud.count * 1.2 : 1 + feud.count * 0.5}
+              style={{ filter: `drop-shadow(0 0 ${full ? 6 : 2}px ${a.color}) drop-shadow(0 0 ${full ? 6 : 2}px ${b.color})` }}
               x1={a.x}
               x2={b.x}
               y1={a.y}
@@ -187,12 +213,13 @@ export function FeudTable({ data, size, focusId, showNumbers = false, onSelect }
               className="feud-seat-ring"
               cx={seat.x}
               cy={seat.y}
-              r={full ? 21 : 9}
+              r={full ? 20 : 9}
               stroke={seat.color}
-              style={{ filter: `drop-shadow(0 0 ${full ? 6 : 3}px ${seat.color})` }}
+              style={{ filter: `drop-shadow(0 0 ${full ? 8 : 3}px ${seat.color})` }}
             />
+            {full ? <Medallion className="feud-medallion" cx={seat.x} cy={seat.y} innerRadius={19} /> : null}
             {full && seat.alive ? (
-              <ConstellationMark cx={seat.x} cy={seat.y} radius={12} seat={seat.seat} />
+              <ConstellationMark cx={seat.x} cy={seat.y} radius={11} seat={seat.seat} />
             ) : (
               <text
                 className="feud-seat-initial"
@@ -206,9 +233,19 @@ export function FeudTable({ data, size, focusId, showNumbers = false, onSelect }
               </text>
             )}
             {full ? (
-              <text className="feud-seat-name" textAnchor="middle" x={seat.x} y={seat.y + 34}>
-                {seat.label}
-              </text>
+              // The name sits on a small plaque set into the brass ring, outside the seat.
+              <g className="feud-plaque">
+                <rect
+                  height={18}
+                  rx={9}
+                  width={seat.label.length * 6.6 + 16}
+                  x={seat.plaque.x - (seat.label.length * 6.6 + 16) / 2}
+                  y={seat.plaque.y - 9}
+                />
+                <text className="feud-seat-name" dominantBaseline="central" textAnchor="middle" x={seat.plaque.x} y={seat.plaque.y}>
+                  {seat.label}
+                </text>
+              </g>
             ) : null}
           </g>
         );
