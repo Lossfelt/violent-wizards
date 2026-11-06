@@ -6,3 +6,4 @@ server-dist/
 *.tsbuildinfo
 npm-debug.log*
 codex-dev*.log
+docs/
