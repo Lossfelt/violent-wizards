@@ -33,8 +33,9 @@ wizard can tune one Mado up to 60° toward a shield they have tracked.
 
 Shields drift a hidden 2 to 6° per round in a fixed direction, so knowledge
 goes stale unless it is refreshed. Instead of attacking, a wizard can rotate
-their shield up to 60°: everyone senses it and loses precision, but the
-rotating wizard can only flee if attacked that round.
+their shield up to 60° the moment they declare it: everyone senses it and
+loses precision before the battles start, but the rotating wizard can only
+flee if attacked that round.
 
 Each round has these phases:
 

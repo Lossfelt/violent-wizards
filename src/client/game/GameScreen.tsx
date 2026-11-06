@@ -6,6 +6,7 @@ import { ActionSheet } from "./ActionSheet";
 import { DialCenter } from "./DialCenter";
 import { FeudList, FeudTable, feudDataFromGame } from "./FeudTable";
 import { FrequencyDial, type DialLane, type DialMado } from "./FrequencyDial";
+import { Sigil } from "./Sigil";
 import { FRESHNESS_OPACITY, angleDelta, freshnessOf, isKnown, opponentColor } from "./dialMath";
 import { formatClock, useCountdown } from "../useCountdown";
 import "./game.css";
@@ -46,6 +47,8 @@ function DeadlineClock({ game }: { game: GameSnapshot }) {
   const label = game.status === "battle_resolution" ? "Round ends in" : "Planning ends in";
   return (
     <span className="game-clock" data-urgent={seconds <= 15} title={label}>
+      {/* The separator keeps the time from reading as part of the round number. */}
+      <span aria-hidden="true" className="game-clock-separator" />
       <span className="game-clock-label">{label}</span> {formatClock(seconds)}
     </span>
   );
@@ -203,24 +206,27 @@ export function GameScreen({ game: serverGame, actions, error, connected, onOpen
 
   return (
     <div className="game-screen">
-      <header className="game-top">
-        <span className="game-room-code">Room {game.code}</span>
-        <span className="game-connection" data-connected={connected} title={connected ? "Connected" : "Reconnecting"} />
-        <button aria-label="Rules" className="game-icon-button" onClick={onOpenRules} type="button">
-          <BookOpen aria-hidden="true" size={18} />
-        </button>
-      </header>
-
       <div className="game-steps">
-        <span className="game-round">Round {game.roundNumber}</span>
+        <span className="game-round-line">
+          <span className="game-round">Round {game.roundNumber}</span>
+          <DeadlineClock game={game} />
+        </span>
+        {/* Room, connection and rules share the round line instead of taking a row of their own. */}
+        <span className="game-top">
+          <span className="game-room-code"><span className="game-room-word">Room </span>{game.code}</span>
+          <span className="game-connection" data-connected={connected} title={connected ? "Connected" : "Reconnecting"} />
+          <button aria-label="Rules" className="game-icon-button" onClick={onOpenRules} type="button">
+            <BookOpen aria-hidden="true" size={16} />
+          </button>
+        </span>
         <ol>
-          {STEPS.map(([status, label]) => (
+          {STEPS.map(([status, label], index) => (
             <li data-on={game.status === status} key={status}>
+              <span className="game-step-numeral">{["I", "II", "III"][index]}</span>
               {label}
             </li>
           ))}
         </ol>
-        <DeadlineClock game={game} />
         <span className="game-hp">
           <b data-hit={hitKey !== null} key={hitKey ?? "steady"}>
             {Math.max(0, Math.ceil(me.health))}
@@ -239,6 +245,7 @@ export function GameScreen({ game: serverGame, actions, error, connected, onOpen
             style={{ borderColor: opponentColor(game, opponent.id) }}
             type="button"
           >
+            <Sigil seat={opponent.seat} size={22} />
             {opponent.name}
             {!opponent.connected ? <small> · off</small> : null}
           </button>

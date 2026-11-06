@@ -15,15 +15,16 @@
   border-radius: 10px;
   padding: 0 14px;
   color: var(--text);
-  background: rgba(245, 232, 202, 0.06);
+  background: rgba(14, 26, 66, 0.72);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
 }
 
 .game-screen button[aria-pressed="true"] {
-  border-color: var(--gold);
-  background: rgba(214, 168, 71, 0.18);
+  border-color: var(--gold-2);
+  background: rgba(224, 169, 62, 0.2);
+  box-shadow: var(--glow-gold);
 }
 
 .game-screen button[data-tone="danger"] {
@@ -40,7 +41,9 @@
 
 .game-top {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
   align-items: center;
   color: var(--faint);
   font-size: 0.78rem;
@@ -49,7 +52,8 @@
   text-transform: uppercase;
 }
 
-.game-room-code { margin-right: auto; }
+.game-room-code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 359px) { .game-room-word { display: none; } }
 
 .game-connection {
   width: 9px;
@@ -63,22 +67,22 @@
 .game-screen .game-icon-button {
   display: grid;
   place-items: center;
-  width: 38px;
-  min-height: 38px;
+  width: 32px;
+  min-height: 32px;
   padding: 0;
 }
 
 .game-steps {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  grid-template-columns: auto 1fr auto;
   gap: 10px;
   align-items: center;
-  margin-top: 8px;
 }
 
 .game-round {
   color: var(--gold-2);
   font: 400 1.05rem Georgia, serif;
+  text-shadow: var(--glow-gold);
   white-space: nowrap;
 }
 
@@ -94,8 +98,26 @@
   text-transform: uppercase;
 }
 
-.game-steps li { padding: 4px 8px; border-radius: 999px; color: var(--faint); }
-.game-steps li[data-on="true"] { color: #171009; background: var(--gold-2); }
+/* The round, room, clock and hit points share the first line; the phase steps get the second. */
+.game-steps { row-gap: 6px; }
+.game-steps ol { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
+.game-hp { grid-column: 3; grid-row: 1; }
+.game-round-line { display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+
+.game-steps li { display: flex; gap: 5px; align-items: center; padding: 3px 9px 3px 3px; border-radius: 999px; color: var(--faint); }
+.game-steps li[data-on="true"] { color: var(--gold-2); background: rgba(224, 169, 62, 0.14); box-shadow: inset 0 0 0 1px rgba(255, 214, 121, 0.5), var(--glow-gold); }
+
+.game-step-numeral {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font: 400 0.62rem Georgia, serif;
+}
+
+.game-steps li[data-on="true"] .game-step-numeral { color: #1d1204; background: var(--gold-2); border-color: var(--gold-2); }
 .game-hp { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
 
 .game-clock {
@@ -107,6 +129,8 @@
 }
 
 .game-clock[data-urgent="true"] { color: #f06e63; }
+.game-clock { display: inline-flex; align-items: center; gap: 9px; }
+.game-clock-separator { width: 1px; height: 16px; background: rgba(224, 169, 62, 0.45); }
 .game-clock-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 .sheet-orders {
@@ -125,14 +149,18 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  align-items: center;
-  margin-top: 12px;
+  align-items: flex-start;
+  margin-top: 10px;
 }
 
 .game-screen .game-chips > button:not(.game-mini-table) {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
   min-height: 36px;
   border-width: 2px;
   border-radius: 999px;
+  padding: 0 14px 0 5px;
 }
 
 .game-chips small { color: var(--muted); font-weight: 600; }
@@ -142,31 +170,44 @@
   min-height: 0;
   border-radius: 12px;
   padding: 2px;
-  background: rgba(12, 60, 52, 0.25);
+  background: rgba(8, 16, 42, 0.75);
 }
 
 .feud-table[data-size="mini"] { display: block; width: 92px; height: auto; }
 .feud-table[data-size="full"] { display: block; width: min(100%, 360px); height: auto; }
-.feud-line { stroke: #f06e63; }
-.feud-line-live { stroke: #f06e63; stroke-width: 4; animation: feud-pulse 1s ease-in-out infinite alternate; }
+/* The war table: an orrery plate where every fight leaves a beam of starlight between two seats. */
+.feud-plate { fill: rgba(6, 12, 34, 0.6); stroke: rgba(201, 154, 69, 0.6); stroke-width: 1.2; }
+.feud-table[data-size="full"] .feud-plate { stroke: none; fill: rgba(5, 10, 30, 0.72); }
+.feud-ring { filter: drop-shadow(0 0 8px rgba(255, 190, 80, 0.4)); }
+.feud-medallion { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); }
+.feud-plaque rect { fill: #0a1434; stroke: #e7bd62; stroke-width: 1.2; }
+.feud-plate-inner { fill: none; stroke: rgba(170, 195, 255, 0.12); stroke-dasharray: 1 4; }
+.feud-line { stroke-linecap: round; }
+.feud-line-live {
+  stroke: #fff4d6;
+  stroke-width: 4;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px #ffd679) drop-shadow(0 0 2px #ffffff);
+  animation: feud-pulse 0.9s ease-in-out infinite alternate;
+}
 
 @keyframes feud-pulse {
-  from { stroke-opacity: 0.3; }
+  from { stroke-opacity: 0.35; }
   to { stroke-opacity: 1; }
 }
 
-.feud-seat circle { fill: #111615; stroke-width: 2.5; }
+.feud-seat-ring { fill: #070d26; stroke-width: 2.5; }
 .feud-seat[data-selectable="true"] { cursor: pointer; }
 .feud-seat[data-dead="true"] { opacity: 0.35; }
-.feud-seat[data-focus="true"] circle { fill: #2a2412; stroke-width: 4; }
+.feud-seat[data-focus="true"] .feud-seat-ring { fill: #1c1a2e; stroke-width: 4; }
 .feud-seat-initial { fill: var(--text); font-family: Georgia, serif; font-weight: 700; pointer-events: none; }
-.feud-seat-name { fill: var(--muted); font: 700 10px system-ui, sans-serif; pointer-events: none; }
+.feud-seat-name { fill: #ffe3a0; font: 400 11px Georgia, serif; letter-spacing: 0.04em; pointer-events: none; }
 
 .feud-label {
   fill: var(--text);
   font: 800 11px system-ui, sans-serif;
   paint-order: stroke;
-  stroke: #050607;
+  stroke: #040817;
   stroke-width: 4px;
 }
 
@@ -196,25 +237,52 @@
 
 /* The dial */
 
-.dial { display: block; width: 100%; margin: 4px auto 0; touch-action: none; user-select: none; }
-.dial-face { fill: rgba(6, 9, 9, 0.9); stroke: rgba(214, 168, 71, 0.35); }
-.dial-tick { stroke: rgba(245, 232, 202, 0.25); }
-.dial-tick[data-major="true"] { stroke: rgba(245, 232, 202, 0.6); stroke-width: 2; }
-.dial-degree { fill: var(--faint); font-size: 10px; }
+.dial {
+  display: block;
+  width: 100%;
+  margin: 4px auto 0;
+  overflow: visible;
+  touch-action: none;
+  user-select: none;
+}
+
+/* The orrery: a dark sky plate inside brass rings. */
+.dial-face { fill: url(#dial-face-fill); filter: drop-shadow(0 0 18px rgba(80, 120, 255, 0.18)); }
+.dial-grid { fill: none; stroke: rgba(170, 195, 255, 0.1); stroke-dasharray: 1 4; }
+.dial-ring { filter: drop-shadow(0 0 6px rgba(255, 190, 80, 0.45)); }
+.dial-plaque circle { fill: #0a1434; stroke: #e7bd62; stroke-width: 1.2; }
+.dial-plaque text { fill: #ffe3a0; font: 700 8.5px Georgia, serif; }
+.dial-tick { stroke: rgba(255, 214, 121, 0.35); }
+.dial-tick[data-major="true"] { stroke: #ffd679; stroke-width: 2; }
+.dial-degree { fill: #e9c77a; font: 400 10px Georgia, serif; }
 .dial-lane-initial { font: 800 8px system-ui, sans-serif; pointer-events: none; }
-.dial-orbit { fill: none; stroke: rgba(94, 224, 194, 0.18); stroke-dasharray: 2 4; }
-.dial-reach { fill: rgba(94, 224, 194, 0.1); }
-.dial-ghost { fill: none; stroke: rgba(245, 232, 202, 0.4); stroke-dasharray: 2 3; }
+.dial-lane-arc[data-narrow="true"] { stroke: #fff6dc; stroke-opacity: 0.85; stroke-width: 1; paint-order: stroke; }
+.dial-orbit { fill: none; stroke: rgba(255, 214, 121, 0.22); stroke-dasharray: 1 5; }
+.dial-reach { fill: rgba(95, 227, 214, 0.1); stroke: rgba(95, 227, 214, 0.3); stroke-width: 0.6; }
+.dial-ghost { fill: none; stroke: rgba(255, 236, 190, 0.45); stroke-dasharray: 2 3; }
 
+/* Mados are small burning stars: a generated star sprite with the slot number on its core. */
 .dial-mado { cursor: pointer; }
-.dial-mado circle { fill: #0b1413; stroke: #5ee0c2; stroke-width: 2; }
-.dial-mado text { fill: #d8fff7; font: 700 13px system-ui, sans-serif; pointer-events: none; }
-.dial-mado[data-active="true"] circle { stroke: var(--gold-2); stroke-width: 3; }
-.dial-mado[data-state="tuned"] circle { fill: #0c3a36; }
-.dial-mado[data-state="discard"] circle { stroke: #f06e63; stroke-dasharray: 3 3; fill: #1a0b0a; }
-.dial-mado[data-state="used"] { opacity: 0.3; cursor: default; }
+.dial-mado-hit { fill: transparent; stroke: transparent; stroke-width: 2; }
+.dial-mado-star { transform-box: fill-box; transform-origin: center; transition: filter 200ms ease; }
+.dial-mado text { fill: #3a1c00; font: 900 13px system-ui, sans-serif; pointer-events: none; }
+.dial-mado[data-active="true"] .dial-mado-hit { stroke: #ffffff; stroke-dasharray: 3 3; }
+.dial-mado[data-active="true"] .dial-mado-star { animation: star-pulse 1.2s ease-in-out infinite alternate; }
+.dial-mado[data-state="tuned"] .dial-mado-star { filter: hue-rotate(150deg) saturate(1.3); }
+.dial-mado[data-state="tuned"] .dial-mado-hit { stroke: var(--teal); }
+.dial-mado[data-state="discard"] .dial-mado-star { filter: grayscale(1) brightness(0.35) sepia(1) hue-rotate(-40deg) saturate(4); }
+.dial-mado[data-state="discard"] .dial-mado-hit { stroke: var(--danger); stroke-dasharray: 3 3; }
+.dial-mado[data-state="discard"] text { fill: #ffd2cc; }
+.dial-mado[data-state="used"] { cursor: default; }
+.dial-mado[data-state="used"] .dial-mado-star { filter: grayscale(1) brightness(0.32); }
+.dial-mado[data-state="used"] text { fill: #7d89ad; }
 
-.dial-shield circle { fill: #2a1f0b; stroke: var(--gold-2); stroke-width: 2; }
+@keyframes star-pulse {
+  from { transform: scale(0.92); }
+  to { transform: scale(1.12); }
+}
+
+.dial-shield circle { fill: #2b1d06; stroke: var(--gold-2); stroke-width: 2; filter: drop-shadow(0 0 6px rgba(255, 196, 92, 0.7)); }
 .dial-shield text { fill: var(--gold-2); font-size: 14px; pointer-events: none; }
 .dial-shield[data-draggable="true"] { cursor: grab; }
 
@@ -233,7 +301,7 @@
   text-align: center;
 }
 
-.dial-center b { color: var(--gold-2); font-family: Georgia, serif; font-size: 1.1rem; }
+.dial-center b { color: var(--gold-2); font-family: Georgia, serif; font-size: 1.1rem; text-shadow: var(--glow-gold); }
 .dial-center span { font-size: 0.82rem; font-weight: 800; }
 .dial-center small { color: var(--muted); font-size: 0.7rem; }
 
@@ -243,10 +311,14 @@
   display: grid;
   gap: 10px;
   margin-top: 8px;
-  border: 1px solid var(--border-muted);
-  border-radius: 16px;
-  padding: 14px;
-  background: rgba(12, 15, 15, 0.9);
+  border-style: solid;
+  border-width: 12px;
+  border-image: url("/art/frame.webp") 150 / 28px / 3px stretch;
+  border-radius: 6px;
+  padding: 8px 6px;
+  background: var(--panel);
+  box-shadow: inset 0 1px 0 rgba(255, 214, 121, 0.12), 0 14px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
 }
 
 .sheet-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
@@ -256,7 +328,8 @@
 .sheet-battle span { font-size: 0.95rem; }
 .sheet-echo { font-weight: 900; text-transform: uppercase; }
 .sheet-incoming { margin: -4px 0 0; color: var(--muted); font-size: 0.85rem; }
-.sheet-incoming span + span::before { content: " · "; color: var(--faint); font-weight: 400; }
+/* Inline-block keeps the separator out of the latest shot's underline. */
+.sheet-incoming span + span::before { content: "·"; display: inline-block; margin: 0 6px; color: var(--faint); font-weight: 400; }
 .sheet-incoming span[data-hit="true"] { color: #f6a39b; font-weight: 800; }
 .sheet-incoming span[data-latest="true"] { text-decoration: underline; text-underline-offset: 3px; }
 
@@ -271,9 +344,10 @@
 
 .game-screen .sheet-primary {
   min-height: 52px;
-  border-color: var(--gold-2);
-  color: #171009;
-  background: linear-gradient(180deg, var(--gold-2), var(--gold));
+  border-color: #ffe6a8;
+  color: #1d1204;
+  background: radial-gradient(circle at 50% 0%, #fff0c4, var(--gold-2) 45%, var(--gold));
+  box-shadow: 0 0 18px rgba(255, 196, 92, 0.45);
 }
 
 .game-screen .sheet-quiet { color: var(--muted); }
@@ -298,7 +372,7 @@
   font-size: 0.88rem;
 }
 
-.game-toast { color: #d8fff7; background: rgba(12, 118, 111, 0.4); cursor: pointer; }
+.game-toast { color: #dcfffb; background: rgba(13, 111, 122, 0.45); cursor: pointer; }
 .game-error { color: #ffd8d2; background: rgba(95, 22, 24, 0.7); }
 
 .game-overlay {
@@ -311,7 +385,8 @@
   gap: 12px;
   padding: 24px 16px 40px;
   overflow-y: auto;
-  background: #050607;
+  background: rgba(3, 6, 20, 0.94);
+  backdrop-filter: blur(8px);
   color: var(--muted);
   text-align: center;
 }

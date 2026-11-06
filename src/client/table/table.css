@@ -3,7 +3,7 @@
 .table-screen {
   box-sizing: border-box;
   min-height: 100vh;
-  padding: 20px clamp(16px, 4vw, 56px) 40px;
+  padding: 14px clamp(16px, 4vw, 56px) 12px;
   color: var(--text);
 }
 
@@ -13,7 +13,7 @@
   border-radius: 12px;
   padding: 0 20px;
   color: var(--text);
-  background: rgba(245, 232, 202, 0.06);
+  background: rgba(14, 26, 66, 0.75);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -23,9 +23,10 @@
 
 .table-screen .table-primary {
   min-height: 60px;
-  border-color: var(--gold-2);
-  color: #171009;
-  background: linear-gradient(180deg, var(--gold-2), var(--gold));
+  border-color: #ffe6a8;
+  color: #1d1204;
+  background: radial-gradient(circle at 50% 0%, #fff0c4, var(--gold-2) 45%, var(--gold));
+  box-shadow: 0 0 24px rgba(255, 196, 92, 0.45);
   font-size: 1.15rem;
 }
 
@@ -92,6 +93,8 @@
   margin: 8px 0 24px;
   color: var(--gold-2);
   font: 400 clamp(2.8rem, 7vw, 6rem) / 1 Georgia, serif;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 28px rgba(255, 196, 92, 0.55), 0 0 4px rgba(255, 240, 200, 0.6);
 }
 
 .table-message p {
@@ -113,7 +116,7 @@
   border-radius: 12px;
   padding: 14px;
   color: var(--text);
-  background: rgba(3, 5, 5, 0.8);
+  background: rgba(3, 7, 20, 0.82);
   font: 400 1.4rem / 1.35 Georgia, serif;
   resize: vertical;
 }
@@ -123,10 +126,7 @@
   align-content: start;
   justify-items: center;
   gap: 8px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 24px;
-  background: rgba(12, 15, 15, 0.9);
+  padding: 18px;
   text-align: center;
 }
 
@@ -156,9 +156,14 @@
 }
 
 .table-roster li {
-  border: 3px solid;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border: 2px solid;
   border-radius: 999px;
-  padding: 10px 22px;
+  padding: 6px 22px 6px 6px;
+  background: rgba(6, 12, 34, 0.8);
+  box-shadow: 0 0 16px rgba(80, 120, 255, 0.15);
   font: 400 clamp(1.2rem, 2.2vw, 1.7rem) Georgia, serif;
 }
 
@@ -167,21 +172,90 @@
 
 /* During the game */
 
+/* Like an orrery on a desk: the wizards on the left, the war table in the middle, the battles
+   on the right. */
 .table-game {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1.7fr) minmax(250px, 0.9fr);
   grid-template-areas:
-    "status status"
-    "board side";
-  gap: clamp(16px, 3vw, 36px);
-  margin-top: 16px;
+    "status status status"
+    "wizards board side";
+  gap: clamp(12px, 2vw, 28px) clamp(16px, 3vw, 36px);
+  margin-top: 8px;
 }
 
-.table-status { grid-area: status; display: grid; gap: 10px; }
-.table-board { grid-area: board; display: grid; place-items: center; }
-.table-side { grid-area: side; display: grid; align-content: start; gap: 12px; }
+/* One line across the top, so the war table can use the rest of the screen height. */
+.table-status {
+  grid-area: status;
+  display: flex;
+  gap: 8px 24px;
+  align-items: center;
+}
 
-.table-round { color: var(--gold-2); font: 400 clamp(2rem, 4vw, 3.4rem) Georgia, serif; }
+.table-status .table-status-text { flex: 1 1 auto; min-width: 0; font-size: clamp(0.95rem, 1.4vw, 1.25rem); }
+.table-status .table-deadline { flex: none; white-space: nowrap; }
+.table-status ol { flex: none; }
+.table-board { grid-area: board; display: grid; place-items: center; }
+.table-wizards { grid-area: wizards; }
+.table-side { grid-area: side; }
+
+/* Panels sit in a generated brass frame with star corners. */
+.table-panel,
+.table-join {
+  border-style: solid;
+  border-width: 16px;
+  border-image: url("/art/frame.webp") 150 / 34px / 4px stretch;
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(10, 18, 46, 0.78), rgba(4, 8, 24, 0.86));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+.table-panel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+
+.table-panel h2 {
+  margin: 4px 0 0;
+  color: var(--gold-2);
+  font: 400 1.05rem Georgia, serif;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+  text-shadow: var(--glow-gold);
+}
+
+.table-panel h2::after {
+  content: "";
+  display: block;
+  height: 16px;
+  margin-top: 2px;
+  background: url("/art/divider.webp") center / 115% auto no-repeat;
+}
+
+.table-phase-numeral {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9em;
+  height: 1.9em;
+  margin-right: 8px;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  font: 400 0.85em Georgia, serif;
+  text-transform: none;
+}
+
+.table-round {
+  flex: none;
+  white-space: nowrap;
+  color: var(--gold-2);
+  font: 400 clamp(2rem, 4vw, 3.4rem) Georgia, serif;
+  text-shadow: 0 0 22px rgba(255, 196, 92, 0.5);
+}
 
 .table-status ol {
   display: flex;
@@ -194,10 +268,12 @@
   text-transform: uppercase;
 }
 
-.table-status li { padding: 6px 16px; border-radius: 999px; color: var(--faint); }
-.table-status li[data-on="true"] { color: #171009; background: var(--gold-2); }
+.table-status li { display: flex; align-items: center; padding: 6px 16px 6px 6px; border-radius: 999px; color: var(--faint); }
+.table-status li[data-on="true"] { color: var(--gold-2); background: rgba(224, 169, 62, 0.14); box-shadow: inset 0 0 0 1px rgba(255, 214, 121, 0.5), var(--glow-gold); text-shadow: var(--glow-gold); }
+.table-status li[data-on="true"] .table-phase-numeral { color: #1d1204; background: var(--gold-2); border-color: var(--gold-2); }
 .table-status p { margin: 0; color: var(--text); font-size: clamp(1.1rem, 2vw, 1.6rem); }
-.table-status .table-deadline { color: var(--muted); }
+.table-status .table-deadline { margin-left: auto; color: var(--muted); }
+.table-status .table-deadline b { font-size: 1.4em; text-shadow: var(--glow-gold); }
 .table-status .table-deadline b { color: var(--gold-2); font-variant-numeric: tabular-nums; }
 .table-status .table-deadline[data-urgent="true"] b { color: #f06e63; }
 .table-roster .round-time { margin: 0 0 20px; }
@@ -205,17 +281,10 @@
 .table-board .feud-table[data-size="full"] {
   width: auto;
   max-width: 100%;
-  height: min(62vh, 600px);
+  height: clamp(320px, calc(100vh - 160px), 820px);
 }
 .table-board .feud-seat-name { font-size: 12px; }
 
-.table-side h2 {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 0.85rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 
 .table-players,
 .table-battles { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
@@ -230,7 +299,6 @@
   font-size: 1.15rem;
 }
 
-.table-players i { width: 14px; height: 14px; border-radius: 999px; }
 .table-players span,
 .table-battles span { margin-left: auto; color: var(--muted); font-size: 0.95rem; }
 .table-players li[data-alive="false"] { opacity: 0.45; text-decoration: line-through; }
@@ -249,5 +317,6 @@
   .table-roster,
   .table-status,
   .table-board,
+  .table-wizards,
   .table-side { grid-area: auto; }
 }

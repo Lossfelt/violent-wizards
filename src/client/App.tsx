@@ -169,8 +169,9 @@ function RulesModal({ onClose }: { onClose: () => void }) {
             <p>
               Shields never stand still. Each one drifts a hidden 2 to {SHIELD_DRIFT_MAX}° per round in a
               fixed direction, so known ranges widen every round until a new echo narrows them again.
-              Instead of attacking you can rotate your own shield up to {SHIELD_ROTATION_RANGE}°. Everyone
-              senses it and loses precision on you, but if you are attacked that round you can only flee.
+              Instead of attacking you can rotate your own shield up to {SHIELD_ROTATION_RANGE}°. It happens at
+              once: everyone senses it and loses precision on you before the battles, but if you are
+              attacked that round you can only flee.
             </p>
             <p>
               Known ranges can be shared with other living players outside active battles. The receiver

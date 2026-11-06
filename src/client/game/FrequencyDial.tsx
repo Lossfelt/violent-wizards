@@ -1,8 +1,10 @@
 import { useRef, type PointerEvent, type ReactNode } from "react";
 import type { EchoBand, FrequencyArc } from "../../shared";
+import { BrassRing, StarSprite } from "./artAssets";
 import { ECHO_COLOR, arcBand, pointerAngle, polar } from "./dialMath";
 
-const SIZE = 340;
+// The viewBox leaves room outside the tick ring for the brass astrolabe ring.
+const SIZE = 380;
 const C = SIZE / 2;
 const R_TICK = 152;
 const LANE_START = 121;
@@ -65,6 +67,25 @@ function orbitRadii(mados: DialMado[]) {
   return radii;
 }
 
+// A range of a few degrees is only a few pixels long, so short arcs are drawn at least this wide
+// (centred on the true range) and outlined, or a well-tracked shield nearly disappears.
+const MIN_ARC_DEGREES = 6;
+const NARROW_ARC = 12;
+
+function visibleArc(arc: FrequencyArc): FrequencyArc {
+  const missing = MIN_ARC_DEGREES - (arc.end - arc.start);
+  return missing > 0 ? { start: arc.start - missing / 2, end: arc.end + missing / 2 } : arc;
+}
+
+// The lane initial sits just past the end of the widest arc, so it never covers a short arc.
+// An unnarrowed lane spans the whole circle, and then the label simply sits in the middle.
+function laneLabelAngle(widest: FrequencyArc, radius: number) {
+  if (widest.end - widest.start >= 300) return (widest.start + widest.end) / 2;
+  const visible = visibleArc(widest);
+  const labelDegrees = (10 / radius) * (180 / Math.PI);
+  return visible.end + labelDegrees;
+}
+
 export function FrequencyDial({
   lanes,
   mados,
@@ -107,32 +128,66 @@ export function FrequencyDial({
       role="img"
       viewBox={`0 0 ${SIZE} ${SIZE}`}
     >
+      <defs>
+        <radialGradient id="dial-face-fill">
+          <stop offset="0%" stopColor="#0d1a44" stopOpacity="0.92" />
+          <stop offset="70%" stopColor="#060c26" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#03061a" stopOpacity="0.95" />
+        </radialGradient>
+        <filter id="dial-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.2" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+
       <circle className="dial-face" cx={C} cy={C} r={R_TICK} />
-      {Array.from({ length: 36 }, (_, i) => {
-        const deg = i * 10;
+      {/* The star chart grid: faint rings and meridians, like an orrery's plate. */}
+      {[44, 72, ORBIT + 14].map((r) => (
+        <circle className="dial-grid" cx={C} cy={C} key={r} r={r} />
+      ))}
+      {Array.from({ length: 12 }, (_, i) => {
+        const a = polar(C, C, 24, i * 30);
+        const b = polar(C, C, LANE_START - 4, i * 30);
+        return <line className="dial-grid" key={i} x1={a.x} x2={b.x} y1={a.y} y2={b.y} />;
+      })}
+      {Array.from({ length: 72 }, (_, i) => {
+        const deg = i * 5;
         const major = deg % 30 === 0;
-        const a = polar(C, C, R_TICK, deg);
-        const b = polar(C, C, R_TICK - (major ? 8 : 4), deg);
+        const minor = deg % 10 !== 0;
+        const a = polar(C, C, R_TICK - 1, deg);
+        const b = polar(C, C, R_TICK - (major ? 10 : minor ? 3 : 6), deg);
         return <line className="dial-tick" data-major={major} key={deg} x1={a.x} x2={b.x} y1={a.y} y2={b.y} />;
       })}
-      {[0, 90, 180, 270].map((deg) => {
-        const p = polar(C, C, R_TICK + 10, deg);
-        return (
-          <text className="dial-degree" dominantBaseline="middle" key={deg} textAnchor="middle" x={p.x} y={p.y}>
-            {deg}
-          </text>
-        );
-      })}
+      <BrassRing className="dial-ring" cx={C} cy={C} innerRadius={R_TICK + 1} />
+      {/* Degree plaques set into the brass ring. The ring's own stars mark 0, 90, 180 and 270. */}
+      {Array.from({ length: 12 }, (_, i) => i * 30)
+        .filter((deg) => deg % 90 !== 0)
+        .map((deg) => {
+          const p = polar(C, C, R_TICK + 16, deg);
+          return (
+            <g className="dial-plaque" key={deg}>
+              <circle cx={p.x} cy={p.y} r="9.5" />
+              <text dominantBaseline="central" textAnchor="middle" x={p.x} y={p.y}>
+                {deg}
+              </text>
+            </g>
+          );
+        })}
 
       {lanes.map((lane, index) => {
         const inner = LANE_START + index * LANE_STEP;
         const widest = lane.arcs.reduce((a, b) => (b.end - b.start > a.end - a.start ? b : a));
-        const label = polar(C, C, inner + 2, (widest.start + widest.end) / 2);
+        const label = polar(C, C, inner + 2, laneLabelAngle(widest, inner));
         return (
-          <g key={lane.id} opacity={lane.opacity}>
+          <g filter={lane.focused ? "url(#dial-glow)" : undefined} key={lane.id} opacity={lane.opacity}>
             {lane.arcs.map((arc) => (
               <path
-                d={arcBand(C, C, inner - (lane.focused ? 2 : 0), inner + 5 + (lane.focused ? 2 : 0), arc)}
+                className="dial-lane-arc"
+                d={arcBand(C, C, inner - (lane.focused ? 2 : 0), inner + 5 + (lane.focused ? 2 : 0), visibleArc(arc))}
+                data-narrow={arc.end - arc.start < NARROW_ARC}
                 fill={lane.color}
                 key={arc.start}
               />
@@ -149,7 +204,7 @@ export function FrequencyDial({
         const p = polar(C, C, R_TICK - 2, mark.frequency);
         const latest = index === marks.length - 1;
         return (
-          <g key={`${index}-${mark.frequency}`}>
+          <g filter="url(#dial-glow)" key={`${index}-${mark.frequency}`}>
             {latest ? <circle className="dial-ripple" cx={p.x} cy={p.y} r="6" stroke={ECHO_COLOR[mark.echo]} /> : null}
             <circle cx={p.x} cy={p.y} fill={ECHO_COLOR[mark.echo]} r="4" />
           </g>
@@ -188,7 +243,9 @@ export function FrequencyDial({
               }
               role="button"
             >
-              <circle cx={p.x} cy={p.y} r="15" />
+              {/* A Mado is a small burning star. The plain circle is the tap target. */}
+              <circle className="dial-mado-hit" cx={p.x} cy={p.y} r="15" />
+              <StarSprite className="dial-mado-star" cx={p.x} cy={p.y} glowRadius={19} />
               <text dominantBaseline="central" textAnchor="middle" x={p.x} y={p.y}>
                 {mado.state === "discard" ? "✕" : mado.slot + 1}
               </text>

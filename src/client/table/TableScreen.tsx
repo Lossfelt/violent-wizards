@@ -3,6 +3,7 @@ import { BookOpen } from "lucide-react";
 import type { TableSnapshot } from "../../shared";
 import { seatColor } from "../game/dialMath";
 import { FeudList, FeudTable, feudDataFromTable } from "../game/FeudTable";
+import { Sigil } from "../game/Sigil";
 import { RoundTimePicker } from "../RoundTimePicker";
 import { formatClock, useCountdown } from "../useCountdown";
 import "../game/game.css";
@@ -121,6 +122,7 @@ function TableLobby({ table, joinUrl, qrCodeUrl, onSaveMessage, onSetRoundMinute
         <ul>
           {table.players.map((player) => (
             <li data-online={player.connected} key={player.id} style={{ borderColor: seatColor(player.seat) }}>
+              <Sigil seat={player.seat} size={34} />
               {player.name}
             </li>
           ))}
@@ -150,13 +152,14 @@ function TableGame({ table, onNewGame }: Props) {
       <header className="table-status">
         <span className="table-round">Round {table.roundNumber}</span>
         <ol>
-          {PHASES.map(([status, label]) => (
+          {PHASES.map(([status, label], index) => (
             <li data-on={table.status === status} key={status}>
+              <span className="table-phase-numeral">{["I", "II", "III"][index]}</span>
               {label}
             </li>
           ))}
         </ol>
-        <p>
+        <p className="table-status-text">
           {table.status === "finished"
             ? table.draw
               ? "Nobody survived. The war ends in a draw."
@@ -178,12 +181,12 @@ function TableGame({ table, onNewGame }: Props) {
         <FeudTable data={feuds} focusId={null} showNumbers size="full" />
       </section>
 
-      <section className="table-side">
+      <section className="table-panel table-wizards">
         <h2>Wizards</h2>
         <ul className="table-players">
           {table.players.map((player) => (
             <li data-alive={player.alive} key={player.id}>
-              <i style={{ background: seatColor(player.seat) }} />
+              <Sigil seat={player.seat} size={26} />
               <b>{player.name}</b>
               <span>
                 {!player.alive
@@ -199,7 +202,9 @@ function TableGame({ table, onNewGame }: Props) {
             </li>
           ))}
         </ul>
+      </section>
 
+      <section className="table-panel table-side">
         {table.battles.length > 0 ? (
           <>
             <h2>{table.status === "battle_resolution" ? "Battles now" : "Battles this round"}</h2>
