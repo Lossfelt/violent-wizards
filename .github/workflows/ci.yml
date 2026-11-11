@@ -43,6 +43,8 @@ jobs:
   # Fletter Dependabot-PR-er automatisk når CI er grønn, men bare minor- og
   # patch-oppdateringer. Major-hopp (også sikkerhetsoppdateringer som er
   # major) blir liggende for manuell testing, i tråd med dependabot.yml.
+  # Unntak: GitHub Actions-oppdateringer flettes selv om de er major, fordi
+  # PR-ens egen CI kjører med den nye action-versjonen og dermed tester den.
   # Flettes direkte i stedet for med "gh pr merge --auto", slik at det ikke
   # krever branch protection eller "Allow auto-merge" i repoet.
   dependabot-fletting:
@@ -55,7 +57,7 @@ jobs:
     steps:
       - id: metadata
         uses: dependabot/fetch-metadata@v3
-      - if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+      - if: steps.metadata.outputs.update-type != 'version-update:semver-major' || steps.metadata.outputs.package-ecosystem == 'github_actions'
         run: gh pr merge "$PR_URL" --squash --delete-branch
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
